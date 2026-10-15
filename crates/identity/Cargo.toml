@@ -1,0 +1,12 @@
+[package]
+name = "palicanon_app_identity"
+description = "The PaliCanon app's fixed facts: bundle identifier and display name"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
