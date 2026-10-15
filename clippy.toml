@@ -1,0 +1,2 @@
+doc-valid-idents = ["PaliCanon", "Tipiṭaka", "SuttaCentral", ".."]
+too-many-lines-threshold = 50
