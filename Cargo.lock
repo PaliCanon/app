@@ -2567,6 +2567,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "learn_pali"
+version = "0.1.0"
+source = "git+ssh://git@github.com/PaliCanon/learn-pali.git?tag=fragment-v0.1.0#a19bfd629777d7f0c7775b5ede9edc89482bba91"
+dependencies = [
+ "js-sys",
+ "learn_core",
+ "leptos",
+ "leptos_i18n",
+ "leptos_i18n_codegen",
+ "leptos_i18n_parser",
+ "leptos_meta",
+ "leptos_router",
+ "palicanon-ui-lib",
+ "serde_json",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "leptos"
 version = "0.8.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3511,11 +3530,16 @@ dependencies = [
  "any_spawner",
  "console_error_panic_hook",
  "js-sys",
+ "learn_core",
+ "learn_pali",
  "leptos",
  "leptos_router",
  "map-engine",
+ "palicanon-app-bridge",
  "palicanon-ui-lib",
  "send_wrapper",
+ "serde",
+ "serde_json",
  "tokio",
  "vizualisation",
  "wasm-bindgen",

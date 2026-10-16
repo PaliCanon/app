@@ -17,12 +17,17 @@ leptos = { workspace = true, features = ["csr"] }
 leptos_router.workspace = true
 palicanon-ui-lib.workspace = true
 vizualisation.workspace = true
+learn_pali.workspace = true
+learn_core.workspace = true
+palicanon-app-bridge = { path = "../bridge" }
+serde.workspace = true
+serde_json.workspace = true
 console_error_panic_hook = "0.1"
 js-sys = "0.3"
 send_wrapper = { version = "0.6", features = ["futures"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = ["Headers", "Response", "Window"] }
+web-sys = { version = "0.3", features = ["Headers", "Response", "Window", "console"] }
 
 # The native route tests render the routes on the server side of Leptos
 # (the router reads a request URL, not a browser); the shell itself needs a

@@ -21,6 +21,8 @@ use std::sync::{Arc, Mutex};
 
 use leptos::prelude::*;
 use palicanon_app_front::app::AppWith;
+use palicanon_app_front::files::{AppFiles, FilesPort};
+use palicanon_app_front::progress::{AppStore, ProgressPort};
 use vizualisation::fragment::{MapData, MapFile};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -135,11 +137,38 @@ fn has_canvas() -> bool {
     document().query_selector("canvas").ok().flatten().is_some()
 }
 
+/// The progress and file ports, recording what Learn sends.
+#[derive(Clone, Default)]
+struct Ports {
+    saves: std::rc::Rc<std::cell::RefCell<Vec<(u64, String)>>>,
+}
+
+impl ProgressPort for Ports {
+    fn save(&self, seq: u64, text: String) {
+        self.saves.borrow_mut().push((seq, text));
+    }
+}
+
+impl FilesPort for Ports {
+    fn export(&self, _name: String, _text: String) {}
+    fn import(&self, _done: Box<dyn FnOnce(palicanon_app_bridge::ImportAnswer)>) {}
+}
+
+/// Mounts the app over the fake map data and fake ports, the progress empty.
+fn mount(data: Arc<dyn MapData>, ports: &Ports) {
+    let store = AppStore::new(
+        Ok(palicanon_app_bridge::LoadAnswer::Missing),
+        std::rc::Rc::new(ports.clone()),
+    );
+    let files = AppFiles::new(std::rc::Rc::new(ports.clone()));
+    palicanon_ui_lib::csr::mount(move || view! { <AppWith data=data store=store files=files /> });
+}
+
 #[wasm_bindgen_test]
 async fn the_app_draws_the_map_and_a_sibling_route_releases_it() {
     let fake = Fake::default();
     let data: Arc<dyn MapData> = Arc::new(fake.clone());
-    palicanon_ui_lib::csr::mount(move || view! { <AppWith data=data /> });
+    mount(data, &Ports::default());
 
     // `/` lands on `/map`; the real map mounts and its engine starts.
     until("the address is /map", || pathname() == "/map").await;

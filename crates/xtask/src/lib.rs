@@ -1,11 +1,12 @@
 //! The app's build tasks, native and never shipped: `pins` reads the one
 //! `cargo metadata` of the browser build for the lockstep check and the
-//! checkout paths; `css` builds the Tailwind CSS and `data` stages the map's
-//! data files, both from those paths.
+//! checkout paths; `css` builds the Tailwind CSS, `data` stages the map's
+//! data files and `assets` the fragments' root files, all from those paths.
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
+pub mod assets;
 pub mod css;
 pub mod data;
 pub mod pins;
@@ -42,7 +43,12 @@ pub fn run(
             }
             data::Staged::Copied(n) => format!("xtask data: {n} files in {}", data_out.display()),
         }),
-        other => Err(format!("unknown task {other:?} (pins, css, data)").into()),
+        "assets" => {
+            let out = root.join("target/assets");
+            let n = assets::stage(pins.learn.as_deref(), pins.search.as_deref(), &out)?;
+            Ok(format!("xtask assets: {n} files in {}", out.display()))
+        }
+        other => Err(format!("unknown task {other:?} (pins, css, data, assets)").into()),
     }
 }
 
@@ -67,6 +73,7 @@ mod tests {
             ui_lib: root.join("ui-lib"),
             map: None,
             front: root.join("front"),
+            ..pins::Pins::default()
         };
         (root, pins)
     }

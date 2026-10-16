@@ -6,9 +6,13 @@
 //!    revisions would mean the app and a crate it mounts disagree on the
 //!    shell; a path source would mean a sibling checkout);
 //!
-//! 2. the resolved checkout directories of `palicanon-ui-lib` and of the map
-//!    crate, which the CSS and data tasks read files from. Never a sibling
-//!    path: whatever the lockfile resolves.
+//!    `learn_core` and `learn_pali` (Learn and the progress format the
+//!    native writer reads) resolve to one revision;
+//!
+//! 2. the resolved checkout directories of `palicanon-ui-lib`, of the map
+//!    crate and of the Learn and Search fragments, which the CSS, data and
+//!    assets tasks read files from. Never a sibling path: whatever the
+//!    lockfile resolves.
 //!
 //! The check is over the **wasm32 graph** only (`--filter-platform`): the
 //! native graph is not read, and native dev-dependencies (the front's route
@@ -33,13 +37,45 @@ pub const FRONT: &str = "palicanon-app-front";
 /// tag (`v0.2.0`). Its directory is the repository's `app/`.
 pub const MAP_CRATE: Option<&str> = Some("vizualisation");
 
+/// Learn's crate (learn-pali's fragment, by tag); its directory is the
+/// repository's `app/`.
+pub const LEARN_CRATE: &str = "learn_pali";
+
+/// The progress format's crate, from the same learn-pali tag as Learn.
+pub const LEARN_CORE: &str = "learn_core";
+
+/// Search's crate (search-front's fragment, by tag), once the front mounts it.
+pub const SEARCH_CRATE: Option<&str> = None;
+
+/// The fragments the front mounts, by crate name.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Fragments<'a> {
+    /// The map crate.
+    pub map: Option<&'a str>,
+    /// Learn's crate; with it, `learn_core` must resolve to its revision.
+    pub learn: Option<&'a str>,
+    /// Search's crate.
+    pub search: Option<&'a str>,
+}
+
+/// The fragments this app is built with.
+pub const FRAGMENTS: Fragments<'static> = Fragments {
+    map: MAP_CRATE,
+    learn: Some(LEARN_CRATE),
+    search: SEARCH_CRATE,
+};
+
 /// What the build reads from the resolution.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct Pins {
     /// The checkout directory of `palicanon-ui-lib` (`style/theme.css`, `src/`).
     pub ui_lib: PathBuf,
     /// The checkout directory of the map crate, when the front depends on it.
     pub map: Option<PathBuf>,
+    /// The checkout directory of Learn's crate (`src/`, `public/lotus.png`).
+    pub learn: Option<PathBuf>,
+    /// The checkout directory of Search's crate (`src/`, `public/brand/`).
+    pub search: Option<PathBuf>,
     /// The front's own directory (the workspace member's manifest directory).
     pub front: PathBuf,
 }
@@ -59,6 +95,8 @@ pub enum PinsError {
     /// branch, a bare rev, or a source without the 40-digit revision the
     /// lockfile records).
     NotTagged(String, String),
+    /// Two crates that must come from one revision do not.
+    Apart(String, String),
     /// A feature that must be on is off.
     FeatureOff(String),
     /// A feature that must be off is on.
@@ -84,6 +122,7 @@ impl std::fmt::Display for PinsError {
             Self::NotTagged(name, source) => {
                 write!(f, "{name} is not at a tag's revision (source: {source})")
             }
+            Self::Apart(a, b) => write!(f, "{a} and {b} come from different revisions"),
             Self::FeatureOff(feature) => write!(f, "{UI_LIB} must have `{feature}` on"),
             Self::FeatureOn(feature) => write!(f, "{UI_LIB} must not have `{feature}` on"),
         }
@@ -124,6 +163,23 @@ struct Node {
 /// A [`PinsError`] when the JSON is not metadata, when `palicanon-ui-lib` is
 /// absent, built more than once, not from git, or has the wrong features.
 pub fn read(metadata: &str, map_crate: Option<&str>) -> Result<Pins, PinsError> {
+    read_with(
+        metadata,
+        Fragments {
+            map: map_crate,
+            ..Fragments::default()
+        },
+    )
+}
+
+/// [`read`] with every fragment named: each is held to the git-tag rule and
+/// its directory returned; Learn's `learn_core` must come from Learn's
+/// revision.
+///
+/// # Errors
+/// As [`read`], and [`PinsError::Apart`] when `learn_core` and Learn's crate
+/// resolve to different revisions.
+pub fn read_with(metadata: &str, fragments: Fragments<'_>) -> Result<Pins, PinsError> {
     let metadata: Metadata =
         serde_json::from_str(metadata).map_err(|e| PinsError::Metadata(e.to_string()))?;
     let resolve = metadata
@@ -133,20 +189,41 @@ pub fn read(metadata: &str, map_crate: Option<&str>) -> Result<Pins, PinsError> 
     let ui_lib = built_once(&metadata, resolve, UI_LIB)?;
     check_source(ui_lib.0)?;
     check_features(&ui_lib.1.features)?;
-    let map = match map_crate {
-        Some(name) => {
+    let pinned = |name: Option<&str>| -> Result<Option<&Package>, PinsError> {
+        name.map(|name| {
             let (package, _) = built_once(&metadata, resolve, name)?;
             check_source(package)?;
-            Some(directory(package))
-        }
-        None => None,
+            Ok(package)
+        })
+        .transpose()
     };
+    let map = pinned(fragments.map)?;
+    let learn = pinned(fragments.learn)?;
+    if let Some(learn) = learn {
+        let (core, _) = built_once(&metadata, resolve, LEARN_CORE)?;
+        check_source(core)?;
+        if revision(core) != revision(learn) {
+            return Err(PinsError::Apart(LEARN_CORE.into(), learn.name.clone()));
+        }
+    }
+    let search = pinned(fragments.search)?;
     let front = directory(built_once(&metadata, resolve, FRONT)?.0);
     Ok(Pins {
         ui_lib: directory(ui_lib.0),
-        map,
+        map: map.map(directory),
+        learn: learn.map(directory),
+        search: search.map(directory),
         front,
     })
+}
+
+/// The 40-digit revision after the `#` of a git source.
+fn revision(package: &Package) -> Option<&str> {
+    package
+        .source
+        .as_deref()?
+        .rsplit_once('#')
+        .map(|(_, rev)| rev)
 }
 
 /// The one package called `name` that the resolution builds, with its node.
@@ -300,7 +377,7 @@ fn metadata_into(
 /// # Errors
 /// Whatever [`run_metadata`] or [`read`] refuses.
 pub fn of_workspace(workspace: &std::path::Path) -> Result<Pins, PinsError> {
-    read(&run_metadata(workspace)?, MAP_CRATE)
+    read_with(&run_metadata(workspace)?, FRAGMENTS)
 }
 
 #[cfg(test)]
@@ -516,6 +593,63 @@ mod tests {
         }
     }
 
+    /// `metadata_with` plus Learn's crate and `learn_core`, at the revisions
+    /// given.
+    fn with_learn(learn_rev: &str, core_rev: &str) -> Value {
+        let mut v = metadata_with(&["csr"], REV_A, false);
+        for (name, rev, dir) in [
+            (LEARN_CRATE, learn_rev, "/co/learn-pali/abc/app"),
+            (LEARN_CORE, core_rev, "/co/learn-pali/abc/core"),
+        ] {
+            let src = format!(
+                "git+ssh://git@github.com/PaliCanon/learn-pali.git?tag=fragment-v0.1.0#{rev}"
+            );
+            v["packages"]
+                .as_array_mut()
+                .unwrap()
+                .push(package(name, Some(&src), dir));
+            v["resolve"]["nodes"]
+                .as_array_mut()
+                .unwrap()
+                .push(node(name, Some(&src), &[]));
+        }
+        v
+    }
+
+    fn learn_only() -> Fragments<'static> {
+        Fragments {
+            learn: Some(LEARN_CRATE),
+            ..Fragments::default()
+        }
+    }
+
+    #[test]
+    fn learn_and_its_core_from_one_revision_give_learns_directory() {
+        let v = with_learn(REV_A, REV_A);
+        let pins = read_with(&v.to_string(), learn_only()).expect("pins");
+        assert_eq!(pins.learn, Some(PathBuf::from("/co/learn-pali/abc/app")));
+    }
+
+    #[test]
+    fn learn_and_its_core_from_two_revisions_are_refused() {
+        let v = with_learn(REV_A, REV_B);
+        assert_eq!(
+            read_with(&v.to_string(), learn_only()),
+            Err(PinsError::Apart(LEARN_CORE.into(), LEARN_CRATE.into()))
+        );
+    }
+
+    #[test]
+    fn learn_without_its_core_is_refused() {
+        let mut v = with_learn(REV_A, REV_A);
+        v["packages"].as_array_mut().unwrap().pop();
+        v["resolve"]["nodes"].as_array_mut().unwrap().pop();
+        assert_eq!(
+            read_with(&v.to_string(), learn_only()),
+            Err(PinsError::Missing(LEARN_CORE.into()))
+        );
+    }
+
     #[test]
     fn no_ui_lib_is_refused() {
         let v = json!({"packages": [], "resolve": {"nodes": []}});
@@ -531,6 +665,7 @@ mod tests {
             ui_lib: ui_lib.to_path_buf(),
             map: Some(map.to_path_buf()),
             front: front.to_path_buf(),
+            ..Pins::default()
         }
     }
 
@@ -560,6 +695,10 @@ mod tests {
         for file in crate::data::FILES {
             assert!(crate::data::public_dir(&map).join(file).is_file(), "{file}");
         }
+        // Learn's checkout: its sources and the brand's lotus.
+        let learn = pins.learn.expect("the front depends on Learn");
+        assert!(learn.join("src/fragment.rs").is_file(), "{learn:?}");
+        assert!(learn.join("public/lotus.png").is_file(), "{learn:?}");
     }
 
     /// A `cargo` that leaves a daemon behind holding its output, as

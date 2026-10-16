@@ -1,6 +1,6 @@
 //! `xtask css`: the app's Tailwind CSS. The input stylesheet is written from
 //! the pins (ui-lib's theme, and the sources whose classes are generated:
-//! ui-lib's, the map crate's and the front's), so no path is a sibling
+//! ui-lib's, the map crate's, Learn's, Search's and the front's), so no path is a sibling
 //! checkout; a source that does not exist fails the task (Tailwind would
 //! silently generate nothing for it), and the built CSS must hold a class
 //! only a given source uses.
@@ -49,8 +49,8 @@ impl std::error::Error for CssError {}
 /// The directories Tailwind scans for classes, in order.
 pub fn sources(pins: &Pins) -> Vec<PathBuf> {
     let mut sources = vec![pins.ui_lib.join("src")];
-    if let Some(map) = &pins.map {
-        sources.push(map.join("src"));
+    for fragment in [&pins.map, &pins.learn, &pins.search].into_iter().flatten() {
+        sources.push(fragment.join("src"));
     }
     sources.push(pins.front.join("src"));
     sources
@@ -232,8 +232,29 @@ mod tests {
             map: None,
             // Not a path the code could guess: it comes from the pins.
             front: root.join("members/front"),
+            ..Pins::default()
         };
         (root, pins)
+    }
+
+    /// Learn's and Search's sources are scanned too, between ui-lib's and the
+    /// front's, from their pinned checkouts.
+    #[test]
+    fn the_fragments_sources_are_scanned() {
+        let (root, mut pins) = tree();
+        pins.map = Some(root.join("map"));
+        pins.learn = Some(root.join("learn"));
+        pins.search = Some(root.join("search"));
+        assert_eq!(
+            sources(&pins),
+            [
+                root.join("ui-lib/src"),
+                root.join("map/src"),
+                root.join("learn/src"),
+                root.join("search/src"),
+                root.join("members/front/src"),
+            ]
+        );
     }
 
     #[test]

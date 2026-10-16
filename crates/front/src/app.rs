@@ -1,4 +1,5 @@
-//! The app: one router, ui-lib's shell around the routes.
+//! The app: Learn's progress context above one router, ui-lib's shell
+//! around the routes.
 
 use leptos::prelude::*;
 use leptos_router::components::{Redirect, Route, Router, Routes};
@@ -6,43 +7,63 @@ use leptos_router::hooks::use_location;
 use leptos_router::path;
 use palicanon_ui_lib::{AppShell, Footer, NavList, language_signal, provide_language};
 
+use std::rc::Rc;
 use std::sync::Arc;
 
+use learn_pali::fragment::{LearnProvider, LearnSettings, SharedFiles, SharedStore};
 use vizualisation::fragment::MapData;
 
 use crate::data::{BrowserFetch, BundledData};
+use crate::files::AppFiles;
+use crate::learn_mount::LearnMount;
 use crate::map_mount::{MapMount, MapSource};
+use crate::progress::AppStore;
 use crate::{nav, strings};
 
-/// The app root: the map's data is the files bundled in the app. Mounted by
-/// `palicanon_ui_lib::csr::mount`.
+/// The app root over the progress `store` (built from `progress_load`
+/// before the mount) and the native `files`; the map's data is the files
+/// bundled in the app. Mounted by `palicanon_ui_lib::csr::mount`.
 #[component]
-pub fn App() -> impl IntoView {
+pub fn App(
+    /// The progress, mirrored from the native writer.
+    store: AppStore,
+    /// Export and import through the native dialogs.
+    files: AppFiles,
+) -> impl IntoView {
     let data: Arc<dyn MapData> = Arc::new(BundledData::<BrowserFetch>::default());
-    view! { <AppWith data=data /> }
+    view! { <AppWith data=data store=store files=files /> }
 }
 
-/// The app over a given source of the map's data files (the browser test
-/// gives a fake): the language signal of the page, then the router around the
-/// shell.
+/// The app over given sources (the browser test gives fakes): the language
+/// signal of the page, Learn's progress context (above the router: a store
+/// is not `Send`), then the router around the shell.
 #[component]
 pub fn AppWith(
     /// Where the map reads its data files from.
     data: Arc<dyn MapData>,
+    /// Where the progress lives.
+    store: AppStore,
+    /// How a file moves in and out.
+    files: AppFiles,
 ) -> impl IntoView {
     provide_language();
     provide_context(MapSource(data));
+    let store: SharedStore = Rc::new(store);
+    let files: SharedFiles = Rc::new(files);
     view! {
-        <Router>
-            <Shell>
-                <AppRoutes />
-            </Shell>
-        </Router>
+        <LearnProvider store=store files=files>
+            <Router>
+                <Shell>
+                    <AppRoutes />
+                </Shell>
+            </Router>
+        </LearnProvider>
     }
 }
 
 /// ui-lib's shell: the rail (the current entry follows the router's path),
-/// the page in `<main>`, the footer with the app's links.
+/// Settings with Learn's 'Your progress', the page in `<main>`, the footer
+/// with the app's links.
 #[component]
 fn Shell(children: Children) -> impl IntoView {
     let language = language_signal();
@@ -52,6 +73,7 @@ fn Shell(children: Children) -> impl IntoView {
     view! {
         <AppShell
             nav=NavList::new(sections, current)
+            settings_extra=|| view! { <LearnSettings /> }
             footer=move || {
                 view! { <Footer links=nav::footer_links(language.get()) /> }
             }
@@ -68,6 +90,7 @@ pub fn AppRoutes() -> impl IntoView {
     view! {
         <Routes fallback=NotFound>
             <Route path=path!("") view=|| view! { <Redirect path="/map" /> } />
+            <LearnMount />
             <MapMount />
         </Routes>
     }
@@ -168,9 +191,37 @@ mod tests {
         }
     }
 
+    /// `/learn` and `/learn/` match Learn's route table entirely, nothing
+    /// else does. Learn is not rendered natively: with `csr` its browser
+    /// glue (the clock, the DOM) is compiled in and aborts outside wasm; the
+    /// browser test renders it.
+    #[test]
+    fn learn_routes_are_the_fragments_home_under_learn() {
+        let owner = Owner::new();
+        owner.set();
+        let routes = LearnMount();
+        let (matched, rest) = routes.match_nested("/learn");
+        assert!(matched.is_some() && rest.is_empty());
+        // The router reads `/learn/` as `/learn` (learn-pali's own render
+        // test); the table leaves the slash.
+        let (matched, rest) = routes.match_nested("/learn/");
+        assert!(matched.is_some() && rest == "/", "{rest:?}");
+        for path in ["/", "/learnx", "/learn/nope", "/map", "/search"] {
+            let (matched, rest) = routes.match_nested(path);
+            assert!(matched.is_none() || !rest.is_empty(), "{path}");
+        }
+    }
+
     #[test]
     fn another_address_is_not_found() {
-        for path in ["/nope", "/learn", "/search", "/map/sim/a/b", "/map/a/b/c"] {
+        for path in [
+            "/nope",
+            "/learnx",
+            "/learn/nope",
+            "/search",
+            "/map/sim/a/b",
+            "/map/a/b/c",
+        ] {
             let (html, to) = render(path);
             assert!(html.contains("Not found"), "{path}: {html}");
             assert!(!html.contains("<canvas"), "{path}: {html}");
