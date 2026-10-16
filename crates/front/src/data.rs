@@ -52,6 +52,16 @@ pub fn url_for(name: &str) -> Option<String> {
     FILES.contains(&name).then(|| format!("{DIRECTORY}/{name}"))
 }
 
+/// Whether a response is a data file: a 200 that is not the HTML page.
+/// Tauri answers an address it has no file for with `index.html` and a 200
+/// (seen in the app: a missing `/map-data/…` came back as `text/html`), and
+/// none of the six files is HTML.
+pub fn is_data(status: u16, content_type: Option<&str>) -> bool {
+    status == 200
+        && !content_type
+            .is_some_and(|t| t.trim_start().to_ascii_lowercase().starts_with("text/html"))
+}
+
 /// The map's data, read from the files bundled in the app.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct BundledData<F = BrowserFetch> {
@@ -77,7 +87,7 @@ impl<F: Fetch> FileSource for BundledData<F> {
     }
 }
 
-/// `fetch` in the browser (the webview), 200 only.
+/// `fetch` in the browser (the webview): a 200 that [`is_data`].
 #[derive(Debug, Default, Clone, Copy)]
 pub struct BrowserFetch;
 
@@ -89,7 +99,8 @@ impl Fetch for BrowserFetch {
                 .ok()?
                 .dyn_into::<Response>()
                 .ok()?;
-            if response.status() != 200 {
+            let content_type = response.headers().get("content-type").ok().flatten();
+            if !is_data(response.status(), content_type.as_deref()) {
                 return None;
             }
             let body = JsFuture::from(response.array_buffer().ok()?).await.ok()?;
@@ -169,6 +180,26 @@ mod tests {
         let data = BundledData::with_fetch(double.clone());
         assert_eq!(ready(data.file("graph-sim.bin")), Some(vec![1, 2, 3]));
         assert_eq!(*double.asked.lock().unwrap(), ["/map-data/graph-sim.bin"]);
+    }
+
+    #[test]
+    fn only_a_200_that_is_not_html_is_data() {
+        for (status, content_type, data) in [
+            (200, Some("application/json"), true),
+            (200, Some("application/octet-stream"), true),
+            (200, None, true),
+            (200, Some("text/html"), false),
+            (200, Some("Text/HTML; charset=utf-8"), false),
+            (404, Some("application/json"), false),
+            (500, None, false),
+            (304, None, false),
+        ] {
+            assert_eq!(
+                is_data(status, content_type),
+                data,
+                "{status} {content_type:?}"
+            );
+        }
     }
 
     #[test]

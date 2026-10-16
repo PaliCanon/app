@@ -21,7 +21,7 @@ js-sys = "0.3"
 send_wrapper = { version = "0.6", features = ["futures"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = ["Response", "Window"] }
+web-sys = { version = "0.3", features = ["Headers", "Response", "Window"] }
 
 # The native route tests render the routes on the server side of Leptos
 # (the router reads a request URL, not a browser); the shell itself needs a
