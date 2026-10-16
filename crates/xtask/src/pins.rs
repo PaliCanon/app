@@ -25,6 +25,10 @@ pub const PLATFORM: &str = "wasm32-unknown-unknown";
 /// The UI library's crate name.
 pub const UI_LIB: &str = "palicanon-ui-lib";
 
+/// The front's crate name: a member of this workspace, whose directory the CSS
+/// reads its sources from (never a literal path).
+pub const FRONT: &str = "palicanon-app-front";
+
 /// The map crate's name, once vizualisation 012 is tagged and the front
 /// depends on it. `None` until then: the pins carry no map directory.
 pub const MAP_CRATE: Option<&str> = None;
@@ -36,6 +40,8 @@ pub struct Pins {
     pub ui_lib: PathBuf,
     /// The checkout directory of the map crate, when the front depends on it.
     pub map: Option<PathBuf>,
+    /// The front's own directory (the workspace member's manifest directory).
+    pub front: PathBuf,
 }
 
 /// Why the resolution is not acceptable, or could not be read.
@@ -135,9 +141,11 @@ pub fn read(metadata: &str, map_crate: Option<&str>) -> Result<Pins, PinsError> 
         }
         None => None,
     };
+    let front = directory(built_once(&metadata, resolve, FRONT)?.0);
     Ok(Pins {
         ui_lib: directory(ui_lib.0),
         map,
+        front,
     })
 }
 
@@ -269,8 +277,11 @@ mod tests {
     /// A resolution with one ui-lib at `rev` and the given features.
     fn metadata_with(features: &[&str], rev: &str, map: bool) -> Value {
         let src = git(rev);
-        let mut packages = vec![package(UI_LIB, Some(&src), "/co/ui-lib/9d07205")];
-        let mut nodes = vec![node(UI_LIB, Some(&src), features)];
+        let mut packages = vec![
+            package(UI_LIB, Some(&src), "/co/ui-lib/9d07205"),
+            package(FRONT, None, "/ws/crates/front"),
+        ];
+        let mut nodes = vec![node(UI_LIB, Some(&src), features), node(FRONT, None, &[])];
         if map {
             let msrc = "git+ssh://git@github.com/PaliCanon/vizualisation.git?tag=v0.1.0#2222222222222222222222222222222222222222";
             packages.push(package(
@@ -293,6 +304,21 @@ mod tests {
         let pins = read_json(&v, None).expect("pins");
         assert_eq!(pins.ui_lib, PathBuf::from("/co/ui-lib/9d07205"));
         assert_eq!(pins.map, None);
+    }
+
+    #[test]
+    fn the_front_is_the_workspace_members_directory() {
+        let v = metadata_with(&["csr"], REV_A, false);
+        let pins = read_json(&v, None).expect("pins");
+        assert_eq!(pins.front, PathBuf::from("/ws/crates/front"));
+    }
+
+    #[test]
+    fn a_resolution_without_the_front_is_refused() {
+        let mut v = metadata_with(&["csr"], REV_A, false);
+        v["packages"].as_array_mut().unwrap().remove(1);
+        v["resolve"]["nodes"].as_array_mut().unwrap().remove(1);
+        assert_eq!(read_json(&v, None), Err(PinsError::Missing(FRONT.into())));
     }
 
     #[test]
@@ -428,7 +454,7 @@ mod tests {
             (None, true),
         ] {
             let mut v = metadata_with(&["csr"], REV_A, true);
-            v["packages"][1]["source"] = json!(source);
+            v["packages"][2]["source"] = json!(source);
             let err = read_json(&v, Some("palicanon-map")).unwrap_err();
             if path_source {
                 assert!(matches!(err, PinsError::NotGit(..)), "{source:?}: {err}");

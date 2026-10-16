@@ -46,12 +46,12 @@ impl std::fmt::Display for CssError {
 impl std::error::Error for CssError {}
 
 /// The directories Tailwind scans for classes, in order.
-pub fn sources(pins: &Pins, front_src: &Path) -> Vec<PathBuf> {
+pub fn sources(pins: &Pins) -> Vec<PathBuf> {
     let mut sources = vec![pins.ui_lib.join("src")];
     if let Some(map) = &pins.map {
         sources.push(map.join("src"));
     }
-    sources.push(front_src.to_path_buf());
+    sources.push(pins.front.join("src"));
     sources
 }
 
@@ -60,9 +60,9 @@ pub fn sources(pins: &Pins, front_src: &Path) -> Vec<PathBuf> {
 /// # Errors
 /// [`CssError::MissingSource`] when ui-lib's theme or a source directory is
 /// not there.
-pub fn input(pins: &Pins, front_src: &Path) -> Result<String, CssError> {
+pub fn input(pins: &Pins) -> Result<String, CssError> {
     let theme = pins.ui_lib.join("style/theme.css");
-    let sources = sources(pins, front_src);
+    let sources = sources(pins);
     for path in std::iter::once(&theme).chain(&sources) {
         if !path.exists() {
             return Err(CssError::MissingSource(path.clone()));
@@ -152,7 +152,7 @@ fn read_dir(dir: &Path) -> Vec<PathBuf> {
 /// CSS without a marker class.
 pub fn build(root: &Path, pins: &Pins) -> Result<PathBuf, CssError> {
     let failed = |e: std::io::Error| CssError::Failed(e.to_string());
-    let input_css = input(pins, &root.join("crates/front/src"))?;
+    let input_css = input(pins)?;
     let dir = root.join("target/css");
     std::fs::create_dir_all(&dir).map_err(failed)?;
     let (input_path, output) = (dir.join("input.css"), dir.join("app.css"));
@@ -186,13 +186,15 @@ mod tests {
             std::thread::current().id()
         ));
         let _ = std::fs::remove_dir_all(&root);
-        for dir in ["ui-lib/style", "ui-lib/src", "map/src", "front/src"] {
+        for dir in ["ui-lib/style", "ui-lib/src", "map/src", "members/front/src"] {
             std::fs::create_dir_all(root.join(dir)).unwrap();
         }
         std::fs::write(root.join("ui-lib/style/theme.css"), "").unwrap();
         let pins = Pins {
             ui_lib: root.join("ui-lib"),
             map: None,
+            // Not a path the code could guess: it comes from the pins.
+            front: root.join("members/front"),
         };
         (root, pins)
     }
@@ -201,8 +203,8 @@ mod tests {
     fn the_sources_are_ui_lib_then_the_front() {
         let (root, pins) = tree();
         assert_eq!(
-            sources(&pins, &root.join("front/src")),
-            [root.join("ui-lib/src"), root.join("front/src")]
+            sources(&pins),
+            [root.join("ui-lib/src"), root.join("members/front/src")]
         );
     }
 
@@ -211,11 +213,11 @@ mod tests {
         let (root, mut pins) = tree();
         pins.map = Some(root.join("map"));
         assert_eq!(
-            sources(&pins, &root.join("front/src")),
+            sources(&pins),
             [
                 root.join("ui-lib/src"),
                 root.join("map/src"),
-                root.join("front/src")
+                root.join("members/front/src")
             ]
         );
     }
@@ -224,14 +226,14 @@ mod tests {
     fn the_input_imports_the_theme_and_names_every_source() {
         let (root, mut pins) = tree();
         pins.map = Some(root.join("map"));
-        let css = input(&pins, &root.join("front/src")).unwrap();
+        let css = input(&pins).unwrap();
         assert!(css.starts_with("@import \"tailwindcss\";\n"), "{css}");
         let theme = root.join("ui-lib/style/theme.css");
         assert!(
             css.contains(&format!("@import \"{}\";", theme.display())),
             "{css}"
         );
-        for dir in ["ui-lib/src", "map/src", "front/src"] {
+        for dir in ["ui-lib/src", "map/src", "members/front/src"] {
             let line = format!("@source \"{}\";", root.join(dir).display());
             assert!(css.contains(&line), "{line} in {css}");
         }
@@ -242,13 +244,13 @@ mod tests {
         let (root, mut pins) = tree();
         std::fs::remove_dir_all(root.join("ui-lib/src")).unwrap();
         assert_eq!(
-            input(&pins, &root.join("front/src")),
+            input(&pins),
             Err(CssError::MissingSource(root.join("ui-lib/src")))
         );
         let (root, _) = tree();
         pins.map = Some(root.join("map-not-here"));
         assert_eq!(
-            input(&pins, &root.join("front/src")),
+            input(&pins),
             Err(CssError::MissingSource(root.join("map-not-here/src")))
         );
     }
@@ -258,7 +260,7 @@ mod tests {
         let (root, pins) = tree();
         std::fs::remove_file(root.join("ui-lib/style/theme.css")).unwrap();
         assert_eq!(
-            input(&pins, &root.join("front/src")),
+            input(&pins),
             Err(CssError::MissingSource(root.join("ui-lib/style/theme.css")))
         );
     }
