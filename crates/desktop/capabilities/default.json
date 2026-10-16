@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The webview's one door: the bridge's six commands and the listen of the progress status event. No opener, dialog or fs permission: those are called from Rust only.",
+  "description": "The webview's one door: the bridge's twelve commands (the progress, the files, the search, the sync) and the listen of the progress status and sync sign-in events. No opener, dialog or fs permission: those are called from Rust only.",
   "windows": ["main"],
   "permissions": [
     "allow-progress-load",
@@ -10,6 +10,12 @@
     "allow-import-file",
     "allow-search",
     "allow-search-status",
+    "allow-sync-sign-in",
+    "allow-sync-cancel",
+    "allow-sync-pull",
+    "allow-sync-push",
+    "allow-sync-account",
+    "allow-sync-sign-out",
     "core:event:allow-listen"
   ]
 }

@@ -34,10 +34,14 @@ fn temp(name: &str) -> PathBuf {
 }
 
 fn app_over(dir: &Path) -> tauri::App<MockRuntime> {
-    let mut app =
-        palicanon_app_desktop::configure(mock_builder(), Vec::new(), DataDir::At(dir.into()))
-            .build(tauri::generate_context!())
-            .expect("the app builds on the mock runtime");
+    let mut app = palicanon_app_desktop::configure(
+        mock_builder(),
+        Vec::new(),
+        DataDir::At(dir.into()),
+        palicanon_app_desktop::SyncChoice::Off,
+    )
+    .build(tauri::generate_context!())
+    .expect("the app builds on the mock runtime");
     #[allow(deprecated, reason = "one iteration runs setup")]
     app.run_iteration(|_, _| {});
     app

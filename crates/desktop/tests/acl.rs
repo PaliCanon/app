@@ -1,4 +1,5 @@
-//! The webview's door is the six commands and event listen, nothing else.
+//! The webview's door is the twelve commands (the six of the progress, the
+//! files and the search, the six of the sync) and event listen, nothing else.
 //! Two proofs.
 //!
 //! 1. What `tauri-build` generates from this crate's capabilities is one
@@ -33,9 +34,9 @@ fn request(cmd: &str, body: serde_json::Value) -> InvokeRequest {
 }
 
 /// What tauri-build generates from `capabilities/`: one capability, the
-/// six commands and event listen.
+/// twelve commands and event listen.
 #[test]
-fn the_generated_capabilities_grant_the_six_commands_and_listen() {
+fn the_generated_capabilities_grant_the_twelve_commands_and_listen() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("gen/schemas/capabilities.json");
     let text = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("tauri-build writes {}: {e}", path.display()));
@@ -58,6 +59,12 @@ fn the_generated_capabilities_grant_the_six_commands_and_listen() {
             "allow-progress-save",
             "allow-search",
             "allow-search-status",
+            "allow-sync-account",
+            "allow-sync-cancel",
+            "allow-sync-pull",
+            "allow-sync-push",
+            "allow-sync-sign-in",
+            "allow-sync-sign-out",
             "core:event:allow-listen",
         ]
     );
@@ -92,6 +99,7 @@ fn app_under_test() -> tauri::App<tauri::test::MockRuntime> {
         mock_builder(),
         Vec::new(),
         palicanon_app_desktop::DataDir::At(data),
+        palicanon_app_desktop::SyncChoice::Off,
     )
     .build(tauri::generate_context!())
     .expect("the app builds on the mock runtime")
@@ -149,4 +157,10 @@ fn the_open_door(webview: &tauri::WebviewWindow<tauri::test::MockRuntime>) {
     assert!(listen.is_ok(), "{:?}", listen.err().map(|e| e.to_string()));
     let load = get_ipc_response(webview, request("progress_load", serde_json::json!({})));
     assert!(load.is_ok(), "{:?}", load.err().map(|e| e.to_string()));
+    let account = get_ipc_response(webview, request("sync_account", serde_json::json!({})));
+    assert!(
+        account.is_ok(),
+        "{:?}",
+        account.err().map(|e| e.to_string())
+    );
 }

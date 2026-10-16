@@ -31,6 +31,19 @@ tauri-plugin-log = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
 url = "2"
+# The sync through the learner's Google Drive (task 006): the Drive's
+# location (learn-pali 050's `drive_location`, one module for the site and
+# the app), the OAuth installed-app flow (PKCE: SHA-256, base64url, the
+# system's randomness), the refresh token in the macOS Keychain, the Google
+# calls over rustls (ring) and a loopback listener on tokio.
+base64 = "0.22"
+getrandom = "0.3"
+keyring = { version = "3", features = ["apple-native"] }
+learn_pali.workspace = true
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+sha2 = "0.10"
+tokio = { version = "1", features = ["net", "io-util", "time", "sync", "macros", "rt"] }
 
 [dev-dependencies]
 # The mock runtime, to send the webview's IPC messages through the real ACL.
@@ -40,6 +53,7 @@ palicanon-app-front = { path = "../front" }
 palicanon-app-bridge = { path = "../bridge" }
 palicanon-ui-lib.workspace = true
 serde_json.workspace = true
+tokio = { version = "1", features = ["net", "io-util", "time", "sync", "macros", "rt", "rt-multi-thread"] }
 
 [lints]
 workspace = true

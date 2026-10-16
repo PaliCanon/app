@@ -9,12 +9,16 @@
 // Tauri hands a command its managed state by value (`State` is a borrow).
 #![allow(clippy::needless_pass_by_value)]
 
-use palicanon_app_bridge::{ImportAnswer, LoadAnswer, SearchAnswer, SearchRequest, SearchStatus};
-use tauri::{AppHandle, Runtime, State};
+use palicanon_app_bridge::{
+    ImportAnswer, LoadAnswer, PullAnswer, PushAnswer, SYNC_SIGN_IN_EVENT, SearchAnswer,
+    SearchRequest, SearchStatus, SignInStart, SyncAccountAnswer, SyncFailure,
+};
+use tauri::{AppHandle, Emitter, Runtime, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 use crate::engine::Engine;
 use crate::files;
+use crate::sync::SyncHost;
 use crate::writer::Writer;
 
 /// `progress_load()`: the progress file, read now, I/O only.
@@ -130,4 +134,102 @@ pub async fn search_status(engine: State<'_, Engine>) -> Result<SearchStatus, St
     tauri::async_runtime::spawn_blocking(move || engine.status())
         .await
         .map_err(|e| e.to_string())?
+}
+
+/// `sync_sign_in()`: a sign-in begins (the one waiting before is
+/// cancelled); Google's address is opened once in the system browser and
+/// answered, for the app to show. Its outcome comes as a `sync-sign-in`
+/// event.
+///
+/// # Errors
+/// Never: a failure is the answer's `Failed`.
+#[tauri::command]
+pub async fn sync_sign_in<R: Runtime>(
+    app: AppHandle<R>,
+    host: State<'_, SyncHost>,
+) -> Result<SignInStart, String> {
+    let Some(service) = host.service.clone() else {
+        return Ok(SignInStart::Failed(no_sync()));
+    };
+    let pending = match service.start_sign_in().await {
+        Ok(pending) => pending,
+        Err(failure) => return Ok(SignInStart::Failed(failure)),
+    };
+    if let Err(why) = (host.open)(&pending.url) {
+        log::warn!("sync: the browser did not open the sign-in: {why}");
+    }
+    let finish = pending.finish;
+    tauri::async_runtime::spawn(async move {
+        let event = finish.await;
+        if let Err(error) = app.emit(SYNC_SIGN_IN_EVENT, &event) {
+            log::warn!("sync: the sign-in event was not delivered: {error}");
+        }
+    });
+    Ok(SignInStart::Started {
+        attempt: pending.attempt,
+        url: pending.url,
+    })
+}
+
+/// What every sync command answers in a build without sync.
+fn no_sync() -> SyncFailure {
+    SyncFailure::Drive("no sync in this build".into())
+}
+
+/// `sync_cancel()`: the sign-in waiting is stopped.
+#[tauri::command]
+pub fn sync_cancel(host: State<'_, SyncHost>) {
+    if let Some(service) = &host.service {
+        service.cancel();
+    }
+}
+
+/// `sync_pull()`: the progress file in the learner's Drive.
+///
+/// # Errors
+/// Never: a failure is the answer's `Failed`.
+#[tauri::command]
+pub async fn sync_pull(host: State<'_, SyncHost>) -> Result<PullAnswer, String> {
+    Ok(match host.service.clone() {
+        Some(service) => service.pull().await,
+        None => PullAnswer::Failed(no_sync()),
+    })
+}
+
+/// `sync_push(text)`: `text` written as the progress file.
+///
+/// # Errors
+/// Never: a failure is the answer's `Failed` (a text over the cap too).
+#[tauri::command]
+pub async fn sync_push(host: State<'_, SyncHost>, text: String) -> Result<PushAnswer, String> {
+    if let Err(why) = files::check_cap(&text) {
+        return Ok(PushAnswer::Failed(SyncFailure::Drive(why)));
+    }
+    Ok(match host.service.clone() {
+        Some(service) => service.push(&text).await,
+        None => PushAnswer::Failed(no_sync()),
+    })
+}
+
+/// `sync_account()`: whether this build syncs, and who is signed in. No
+/// network.
+#[tauri::command(async)]
+pub fn sync_account(host: State<'_, SyncHost>) -> SyncAccountAnswer {
+    match &host.service {
+        Some(service) => service.account(),
+        None => SyncAccountAnswer::Unavailable,
+    }
+}
+
+/// `sync_sign_out()`: the token revoked at Google (best effort), then
+/// forgotten. The local progress is kept.
+///
+/// # Errors
+/// Never.
+#[tauri::command]
+pub async fn sync_sign_out(host: State<'_, SyncHost>) -> Result<(), String> {
+    if let Some(service) = host.service.clone() {
+        service.sign_out().await;
+    }
+    Ok(())
 }

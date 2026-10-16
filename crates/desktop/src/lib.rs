@@ -3,8 +3,9 @@
 //! to is decided in one place, [`navigation`]. The webview may call the
 //! app's own commands ([`commands`], the bridge's names) and nothing else:
 //! the progress is kept and written by the native [`writer`], the files and
-//! the search are the shell's; an `https:` or `mailto:` address opens in the
-//! system browser.
+//! the search are the shell's, the sync through the learner's Google Drive
+//! is the shell's too ([`sync`]); an `https:` or `mailto:` address opens in
+//! the system browser.
 
 pub mod commands;
 pub mod disk;
@@ -12,6 +13,7 @@ pub mod engine;
 pub mod files;
 pub mod navigation;
 pub mod second_launch;
+pub mod sync;
 pub mod writer;
 
 use std::path::PathBuf;
@@ -98,6 +100,44 @@ pub enum DataDir {
     At(PathBuf),
 }
 
+/// Which sync the app has (task 006).
+pub enum SyncChoice {
+    /// None: `sync_account` answers `Unavailable`, the other sync commands
+    /// refuse; the front shows no sync UI.
+    Off,
+    /// This build's: Google, the macOS Keychain, the system browser by the
+    /// opener; none when the build had no OAuth secret.
+    Build,
+    /// Given (the tests'): a service and how the sign-in address is opened.
+    Given(sync::SyncService, sync::Opener),
+}
+
+/// The sync the commands reach, from `choice`; the opener of
+/// [`SyncChoice::Build`] is the system browser, from Rust.
+fn sync_host<R: Runtime>(app: &AppHandle<R>, choice: SyncChoice) -> sync::SyncHost {
+    let none: sync::Opener = std::sync::Arc::new(|_| Err("no sync".into()));
+    let host = match choice {
+        SyncChoice::Off => sync::SyncHost {
+            service: None,
+            open: none,
+        },
+        SyncChoice::Build => {
+            let app = app.clone();
+            sync::SyncHost {
+                service: sync::from_build(),
+                open: std::sync::Arc::new(move |address| open_outside(&app, address)),
+            }
+        }
+        SyncChoice::Given(service, open) => sync::SyncHost {
+            service: Some(service),
+            open,
+        },
+    };
+    let state = if host.service.is_some() { "on" } else { "off" };
+    log::info!("sync: {state} in this build");
+    host
+}
+
 /// The progress writer over `dir`, its verdicts emitted to the webview as
 /// the bridge's status event; an emit that fails (the webview gone) is
 /// logged, nothing else.
@@ -156,11 +196,12 @@ pub fn on_run_event<R: Runtime>(app: &AppHandle<R>, event: &RunEvent) {
 ///
 /// `log_targets` is where the app's log goes: [`default_log_targets`] in the
 /// app, none in a test (a test must not write into the user's log).
-/// `data` is where the progress lives.
+/// `data` is where the progress lives; `sync` which sync the app has.
 pub fn configure<R: Runtime>(
     builder: Builder<R>,
     log_targets: Vec<tauri_plugin_log::Target>,
     data: DataDir,
+    sync: SyncChoice,
 ) -> Builder<R> {
     builder
         .plugin(
@@ -179,6 +220,12 @@ pub fn configure<R: Runtime>(
             commands::import_file,
             commands::search,
             commands::search_status,
+            commands::sync_sign_in,
+            commands::sync_cancel,
+            commands::sync_pull,
+            commands::sync_push,
+            commands::sync_account,
+            commands::sync_sign_out,
         ])
         .setup(move |app| {
             let dir = match data {
@@ -189,6 +236,7 @@ pub fn configure<R: Runtime>(
             writer.spawn();
             app.manage(writer);
             app.manage(search_engine(app.handle()));
+            app.manage(sync_host(app.handle(), sync));
             create_window(app.handle())?;
             Ok(())
         })
@@ -214,10 +262,15 @@ pub fn run() {
         Builder::default().plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             focus_main(app);
         }));
-    configure(builder, default_log_targets(), DataDir::App)
-        .build(tauri::generate_context!())
-        .expect("build the PaliCanon app")
-        .run(|app, event| on_run_event(app, &event));
+    configure(
+        builder,
+        default_log_targets(),
+        DataDir::App,
+        SyncChoice::Build,
+    )
+    .build(tauri::generate_context!())
+    .expect("build the PaliCanon app")
+    .run(|app, event| on_run_event(app, &event));
 }
 
 #[cfg(test)]
