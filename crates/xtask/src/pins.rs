@@ -30,7 +30,7 @@ pub const UI_LIB: &str = "palicanon-ui-lib";
 pub const FRONT: &str = "palicanon-app-front";
 
 /// The map crate's name: vizualisation's fragment, a dependency of the front by
-/// tag (`v0.2.0-rc.1`). Its directory is the repository's `app/`.
+/// tag (`v0.2.0`). Its directory is the repository's `app/`.
 pub const MAP_CRATE: Option<&str> = Some("vizualisation");
 
 /// What the build reads from the resolution.

@@ -16,19 +16,13 @@ path = "src/main.rs"
 leptos = { workspace = true, features = ["csr"] }
 leptos_router.workspace = true
 palicanon-ui-lib.workspace = true
+vizualisation.workspace = true
 console_error_panic_hook = "0.1"
 js-sys = "0.3"
 send_wrapper = { version = "0.6", features = ["futures"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = ["Headers", "Response", "Window"] }
-
-# The map: the same crate, with its client side (`csr`) in the browser build only.
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-vizualisation = { workspace = true, features = ["csr"] }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-vizualisation.workspace = true
 
 # The native route tests render the routes on the server side of Leptos
 # (the router reads a request URL, not a browser); the shell itself needs a

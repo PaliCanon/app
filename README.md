@@ -20,7 +20,7 @@ it). Private until opened (the repository is for open source later).
 | Crate | What |
 | --- | --- |
 | `crates/identity` | The fixed bundle identifier and display name. |
-| `crates/front` | The client-side Leptos front (`csr`) on ui-lib: the shell, the rail, the routes (`/` goes to `/map`), the bundled map data. Built to wasm by Trunk. `src/map_mount.rs` is the one place that mounts the map: vizualisation's fragment (tag `v0.2.0-rc.1`) under `/map`, over the data files bundled in the app. |
+| `crates/front` | The client-side Leptos front (`csr`) on ui-lib: the shell, the rail, the routes (`/` goes to `/map`), the bundled map data. Built to wasm by Trunk. `src/map_mount.rs` is the one place that mounts the map: vizualisation's fragment (tag `v0.2.0`) under `/map`, over the data files bundled in the app. |
 | `crates/desktop` | The Tauri 2 shell: the window, the CSP, the one navigation rule (`tauri://localhost` stays, `https:` and `mailto:` open in the system browser, everything else is dropped), single instance. It exposes no command to the webview. |
 | `crates/xtask` | Native build tasks, never shipped: `cargo xtask pins` (ui-lib is built once, from git, with `csr` and without `ssr` or `hydrate`; the checkout paths), `css` (Tailwind), `data` (the map data files). |
 

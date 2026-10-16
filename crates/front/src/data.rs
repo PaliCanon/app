@@ -11,7 +11,7 @@ use std::pin::Pin;
 
 use js_sys::Uint8Array;
 use send_wrapper::SendWrapper;
-use vizualisation::fragment::{MapData, MapFile};
+use vizualisation::fragment::{MAP_FILES, MapData, MapFile};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::Response;
@@ -19,15 +19,15 @@ use web_sys::Response;
 /// Where the build task puts the files, under the app's origin.
 const DIRECTORY: &str = "/map-data";
 
-/// The map's six data files, by name: the only names [`BundledData`] answers.
-pub const FILES: [&str; 6] = [
-    "graph.json",
-    "graph-sim.json",
-    "graph-sim.bin",
-    "translations.json",
-    "blurbs-en.json",
-    "blurbs-fr.json",
-];
+/// The one name the map may ask that no data set has yet: answered `None`,
+/// no request made (the Vietnamese texts then show their English summary).
+const ABSENT: &str = "blurbs-vi.json";
+
+/// The map's data files that are bundled: the names the map may ask
+/// ([`MAP_FILES`]) but the one no data set has.
+pub fn bundled_files() -> impl Iterator<Item = &'static str> {
+    MAP_FILES.into_iter().filter(|name| *name != ABSENT)
+}
 
 /// Fetches an address: the browser's `fetch`, or a double in a test. Its
 /// future is not `Send` (a browser future never is); [`BundledData`] wraps it.
@@ -37,9 +37,11 @@ pub trait Fetch: Send + Sync + 'static {
 }
 
 /// The address of the bundled file `name`, or `None` for a name that is not
-/// one of the six (no request is made for it).
+/// bundled (no request is made for it).
 pub fn url_for(name: &str) -> Option<String> {
-    FILES.contains(&name).then(|| format!("{DIRECTORY}/{name}"))
+    bundled_files()
+        .any(|file| file == name)
+        .then(|| format!("{DIRECTORY}/{name}"))
 }
 
 /// Whether a response is a data file: a 200 with a content type that is
@@ -136,7 +138,7 @@ mod tests {
     #[test]
     fn the_files_are_the_designs_six_names() {
         assert_eq!(
-            FILES,
+            bundled_files().collect::<Vec<_>>(),
             [
                 "graph.json",
                 "graph-sim.json",
@@ -151,14 +153,27 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn the_files_are_the_build_tasks_files() {
-        assert_eq!(FILES, xtask::data::FILES);
+        assert_eq!(bundled_files().collect::<Vec<_>>(), xtask::data::FILES);
     }
 
     #[test]
     fn the_six_names_map_to_the_bundled_directory() {
-        for name in FILES {
+        for name in bundled_files() {
             assert_eq!(url_for(name), Some(format!("/map-data/{name}")));
         }
+    }
+
+    #[test]
+    fn the_optional_vietnamese_blurbs_are_asked_never_fetched() {
+        assert!(MAP_FILES.contains(&"blurbs-vi.json"));
+        assert_eq!(url_for("blurbs-vi.json"), None);
+        let double = Recorder {
+            answer: Some(vec![9]),
+            ..Recorder::default()
+        };
+        let data = BundledData::with_fetch(double.clone());
+        assert_eq!(ready(data.file("blurbs-vi.json")), None);
+        assert_eq!(double.asked.lock().unwrap().len(), 0);
     }
 
     #[test]

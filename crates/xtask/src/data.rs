@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
-/// The six files, by name (the front's `data::FILES` is tested equal).
+/// The six files, by name (the front's `data::bundled_files`, the map's `MAP_FILES` less the optional `blurbs-vi.json`, is tested equal).
 pub const FILES: [&str; 6] = [
     "graph.json",
     "graph-sim.json",

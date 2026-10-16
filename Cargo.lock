@@ -2964,7 +2964,7 @@ dependencies = [
 [[package]]
 name = "map-engine"
 version = "0.1.0"
-source = "git+ssh://git@github.com/PaliCanon/vizualisation.git?tag=v0.2.0-rc.1#5ef7b735881cae9e930e41c5c96b77d56500848a"
+source = "git+ssh://git@github.com/PaliCanon/vizualisation.git?tag=v0.2.0#94940ff583f7659f006f519b0864ebca89536d44"
 dependencies = [
  "bytemuck",
  "glam",
@@ -2979,7 +2979,7 @@ dependencies = [
 [[package]]
 name = "map-formats"
 version = "0.1.0"
-source = "git+ssh://git@github.com/PaliCanon/vizualisation.git?tag=v0.2.0-rc.1#5ef7b735881cae9e930e41c5c96b77d56500848a"
+source = "git+ssh://git@github.com/PaliCanon/vizualisation.git?tag=v0.2.0#94940ff583f7659f006f519b0864ebca89536d44"
 dependencies = [
  "indexmap 2.14.2",
  "serde",
@@ -2990,7 +2990,7 @@ dependencies = [
 [[package]]
 name = "map-layout"
 version = "0.1.0"
-source = "git+ssh://git@github.com/PaliCanon/vizualisation.git?tag=v0.2.0-rc.1#5ef7b735881cae9e930e41c5c96b77d56500848a"
+source = "git+ssh://git@github.com/PaliCanon/vizualisation.git?tag=v0.2.0#94940ff583f7659f006f519b0864ebca89536d44"
 
 [[package]]
 name = "markup5ever"
@@ -5686,7 +5686,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 [[package]]
 name = "vizualisation"
 version = "0.1.0"
-source = "git+ssh://git@github.com/PaliCanon/vizualisation.git?tag=v0.2.0-rc.1#5ef7b735881cae9e930e41c5c96b77d56500848a"
+source = "git+ssh://git@github.com/PaliCanon/vizualisation.git?tag=v0.2.0#94940ff583f7659f006f519b0864ebca89536d44"
 dependencies = [
  "js-sys",
  "leptos",
@@ -5710,7 +5710,7 @@ dependencies = [
 [[package]]
 name = "vizualisation-i18n-check"
 version = "0.1.0"
-source = "git+ssh://git@github.com/PaliCanon/vizualisation.git?tag=v0.2.0-rc.1#5ef7b735881cae9e930e41c5c96b77d56500848a"
+source = "git+ssh://git@github.com/PaliCanon/vizualisation.git?tag=v0.2.0#94940ff583f7659f006f519b0864ebca89536d44"
 dependencies = [
  "serde_json",
 ]
