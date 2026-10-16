@@ -8,6 +8,7 @@
 
 pub mod commands;
 pub mod disk;
+pub mod files;
 pub mod navigation;
 pub mod second_launch;
 pub mod writer;
@@ -145,9 +146,12 @@ pub fn configure<R: Runtime>(
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::progress_load,
             commands::progress_save,
+            commands::export_file,
+            commands::import_file,
         ])
         .setup(move |app| {
             let dir = match data {

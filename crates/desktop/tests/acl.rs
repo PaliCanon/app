@@ -71,6 +71,16 @@ fn the_webview_cannot_invoke_a_plugin_command() {
             serde_json::json!({ "level": 3, "message": "acl probe" }),
         ),
         ("plugin:window|close", serde_json::json!({})),
+        ("plugin:dialog|open", serde_json::json!({ "options": {} })),
+        ("plugin:dialog|save", serde_json::json!({ "options": {} })),
+        (
+            "plugin:dialog|message",
+            serde_json::json!({ "message": "x" }),
+        ),
+        (
+            "plugin:fs|read_text_file",
+            serde_json::json!({ "path": "/etc/hosts" }),
+        ),
         ("plugin:event|emit", serde_json::json!({ "event": "x" })),
     ] {
         let answer = get_ipc_response(&webview, request(cmd, body));

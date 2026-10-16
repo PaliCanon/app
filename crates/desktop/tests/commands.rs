@@ -69,7 +69,7 @@ fn wait_for_file(path: &Path, text: &str) {
 /// One app per test binary: the log plugin sets the process's logger once.
 /// So the scenarios run in order on one app: a save from the webview
 /// reaches the file and loads back; a text over the cap is refused by the
-/// command; `RunEvent::Exit` runs the exit write and closes the writer.
+/// command, an export over it before any dialog; `RunEvent::Exit` runs the exit write and closes the writer.
 #[test]
 fn the_progress_commands_through_the_real_ipc() {
     let dir = temp("ipc");
@@ -96,6 +96,15 @@ fn the_progress_commands_through_the_real_ipc() {
     )
     .unwrap_err();
     assert!(refusal.contains("cap"), "{refusal}");
+
+    // An export over the cap is refused before any dialog opens.
+    let refusal = call(
+        &app,
+        "export_file",
+        serde_json::json!({"name": "p.json", "text": "x".repeat(MAX_TEXT_BYTES + 1)}),
+    )
+    .unwrap_err();
+    assert!(refusal.contains("over"), "{refusal}");
 
     palicanon_app_desktop::on_run_event(app.handle(), &tauri::RunEvent::Exit);
     let writer = app.state::<Writer>();
