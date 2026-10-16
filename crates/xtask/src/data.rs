@@ -1,5 +1,5 @@
 //! `xtask data`: stages the map's six data files from the map crate's
-//! checkout (its `public/`) into a directory that Trunk copies into the dist
+//! checkout (the repository's `public/`) into a directory that Trunk copies into the dist
 //! under `/map-data/`.
 
 use std::path::{Path, PathBuf};
@@ -46,7 +46,13 @@ impl std::fmt::Display for DataError {
 
 impl std::error::Error for DataError {}
 
-/// Copies the six files from `<map>/public/` into `out` (created, emptied
+/// The map's data directory: the repository's `public/`, beside the crate's
+/// directory (the crate is `app/` in the map's repository).
+pub fn public_dir(map: &Path) -> PathBuf {
+    map.parent().unwrap_or(map).join("public")
+}
+
+/// Copies the six files from `<map>/../public/` into `out` (created, emptied
 /// first). With no map crate, only creates the empty `out` and says
 /// [`Staged::Skipped`].
 ///
@@ -59,7 +65,7 @@ pub fn stage(map: Option<&Path>, out: &Path) -> Result<Staged, DataError> {
         .map(|map| {
             FILES
                 .iter()
-                .map(|f| (map.join("public").join(f), *f))
+                .map(|f| (public_dir(map).join(f), *f))
                 .collect()
         })
         .unwrap_or_default();
@@ -95,13 +101,16 @@ mod tests {
         d
     }
 
+    /// A checkout laid out as the map's: the crate in `app/`, the data in
+    /// the repository's `public/`. Returns the crate's directory.
     fn map_with(files: &[&str], name: &str) -> PathBuf {
-        let map = dir(name);
-        std::fs::create_dir_all(map.join("public")).unwrap();
+        let root = dir(name);
+        std::fs::create_dir_all(root.join("app")).unwrap();
+        std::fs::create_dir_all(root.join("public")).unwrap();
         for f in files {
-            std::fs::write(map.join("public").join(f), f.as_bytes()).unwrap();
+            std::fs::write(root.join("public").join(f), f.as_bytes()).unwrap();
         }
-        map
+        root.join("app")
     }
 
     #[test]
@@ -146,8 +155,8 @@ mod tests {
         let map = map_with(&FILES[..4], "four");
         let out = dir("four-out").join("map-data");
         let want = vec![
-            map.join("public/blurbs-en.json"),
-            map.join("public/blurbs-fr.json"),
+            map.parent().unwrap().join("public/blurbs-en.json"),
+            map.parent().unwrap().join("public/blurbs-fr.json"),
         ];
         assert_eq!(stage(Some(&map), &out), Err(DataError::Missing(want)));
         assert!(!out.join("graph.json").exists());

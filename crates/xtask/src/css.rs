@@ -13,9 +13,10 @@ use crate::pins::Pins;
 /// without it did not read ui-lib's `src`.
 pub const UI_LIB_MARKER: &str = ".min-h-screen";
 
-/// A class only the map crate's sources use, once the front depends on the
-/// map crate. `None` until then.
-pub const MAP_MARKER: Option<&str> = None;
+/// A class only the map crate's sources use (the translators' table collapses its
+/// borders; neither ui-lib nor the front uses it): a CSS without it did not
+/// read the map's `src`.
+pub const MAP_MARKER: Option<&str> = Some(".border-collapse");
 
 /// Why the CSS could not be built.
 #[derive(Debug, PartialEq, Eq)]
@@ -69,7 +70,7 @@ pub fn input(pins: &Pins) -> Result<String, CssError> {
         }
     }
     let mut lines = vec![
-        "@import \"tailwindcss\";".to_string(),
+        "@import \"tailwindcss\" source(none);".to_string(),
         format!("@import \"{}\";", theme.display()),
     ];
     lines.extend(
@@ -248,7 +249,9 @@ mod tests {
         let (root, mut pins) = tree();
         pins.map = Some(root.join("map"));
         let css = input(&pins).unwrap();
-        assert!(css.starts_with("@import \"tailwindcss\";\n"), "{css}");
+        // No automatic source detection: it scans the working directory, which holds
+        // this very file and its marker strings (a marker then lands by itself).
+        assert!(css.starts_with("@import \"tailwindcss\" source(none);\n"), "{css}");
         let theme = root.join("ui-lib/style/theme.css");
         assert!(
             css.contains(&format!("@import \"{}\";", theme.display())),

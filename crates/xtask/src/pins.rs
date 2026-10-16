@@ -29,9 +29,9 @@ pub const UI_LIB: &str = "palicanon-ui-lib";
 /// reads its sources from (never a literal path).
 pub const FRONT: &str = "palicanon-app-front";
 
-/// The map crate's name, once vizualisation 012 is tagged and the front
-/// depends on it. `None` until then: the pins carry no map directory.
-pub const MAP_CRATE: Option<&str> = None;
+/// The map crate's name: vizualisation's fragment, a dependency of the front by
+/// tag (`v0.2.0-rc.1`). Its directory is the repository's `app/`.
+pub const MAP_CRATE: Option<&str> = Some("vizualisation");
 
 /// What the build reads from the resolution.
 #[derive(Debug, PartialEq, Eq)]
@@ -509,6 +509,13 @@ mod tests {
             pins.ui_lib
         );
         assert!(pins.ui_lib.join("src").is_dir());
+        // The map crate is pinned too: its sources, and the data files in the
+        // repository's public/ beside its directory, all six.
+        let map = pins.map.expect("the front depends on the map crate");
+        assert!(map.join("src/fragment.rs").is_file(), "{map:?}");
+        for file in crate::data::FILES {
+            assert!(crate::data::public_dir(&map).join(file).is_file(), "{file}");
+        }
     }
 
     /// A `cargo` that leaves a daemon behind holding its output, as
