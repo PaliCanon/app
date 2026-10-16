@@ -44,7 +44,7 @@ fn Shell(children: Children) -> impl IntoView {
 }
 
 /// The routes alone, without the shell: `/` goes to `/map`, `/map` mounts the
-/// map, anything else is [`NotFound`].
+/// map, anything else is the "Not found" page.
 #[component]
 pub fn AppRoutes() -> impl IntoView {
     view! {
