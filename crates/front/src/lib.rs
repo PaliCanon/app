@@ -7,6 +7,7 @@
 //! The browser entry is `main.rs` (`palicanon_ui_lib::csr::mount(App)`).
 
 pub mod app;
+pub mod data;
 pub mod map_mount;
 pub mod nav;
 pub mod strings;

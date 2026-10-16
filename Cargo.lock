@@ -1232,10 +1232,16 @@ version = "0.1.0"
 dependencies = [
  "any_spawner",
  "console_error_panic_hook",
+ "js-sys",
  "leptos",
  "leptos_router",
  "palicanon-ui-lib",
+ "send_wrapper",
  "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "xtask",
 ]
 
 [[package]]
