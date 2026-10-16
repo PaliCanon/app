@@ -19,6 +19,9 @@ tauri-plugin-single-instance = "2"
 url = "2"
 
 [dev-dependencies]
+# The navigation rule is run over the front's real links (tests/links.rs).
+palicanon-app-front = { path = "../front" }
+palicanon-ui-lib.workspace = true
 serde_json.workspace = true
 
 [lints]

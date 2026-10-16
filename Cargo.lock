@@ -3194,6 +3194,8 @@ dependencies = [
 name = "palicanon-app-desktop"
 version = "0.1.0"
 dependencies = [
+ "palicanon-app-front",
+ "palicanon-ui-lib",
  "palicanon_app_identity",
  "serde_json",
  "tauri",

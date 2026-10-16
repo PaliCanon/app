@@ -11,7 +11,7 @@
 #![cfg(target_arch = "wasm32")]
 
 use palicanon_app_front::app::App;
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
@@ -47,17 +47,20 @@ async fn until(what: &str, condition: impl Fn() -> bool) {
     panic!("never: {what}; the page says {:?}", page_text());
 }
 
-/// Goes to `path` the way the back button does: the address changes, then
-/// the browser fires `popstate`, which the router follows.
-fn go_to(path: &str) {
-    let window = window();
-    window
-        .history()
-        .expect("history")
-        .push_state_with_url(&JsValue::NULL, "", Some(path))
-        .expect("push state");
-    let event = web_sys::Event::new("popstate").expect("an event");
-    window.dispatch_event(&event).expect("dispatch");
+/// Follows a link to `path` that the app itself does not have (a page of
+/// the app never links to an unknown address): an anchor is added to the
+/// page and clicked, so the router handles it like any link click. A raw
+/// `pushState` would bypass the router's own history stack.
+fn follow_foreign_link(path: &str) {
+    let document = window().document().expect("a document");
+    let anchor = document.create_element("a").expect("an anchor");
+    anchor.set_attribute("href", path).expect("href");
+    let body = document.body().expect("a body");
+    body.append_child(&anchor).expect("append");
+    anchor
+        .dyn_into::<web_sys::HtmlElement>()
+        .expect("an element")
+        .click();
 }
 
 fn pathname() -> String {
@@ -70,7 +73,7 @@ async fn the_app_mounts_the_map_and_a_sibling_route_unmounts_it() {
 
     // `/` redirects to `/map`; the map route shows.
     until("the map route mounts", || page_text().contains(STUB)).await;
-    assert_eq!(pathname(), "/map");
+    until("the address is /map", || pathname() == "/map").await;
 
     // The rail: a real link to /map, the current entry.
     let document = window().document().expect("a document");
@@ -79,7 +82,6 @@ async fn the_app_mounts_the_map_and_a_sibling_route_unmounts_it() {
         .expect("a selector")
         .expect("the rail's Map link");
     assert_eq!(link.get_attribute("aria-current").as_deref(), Some("page"));
-    assert!(link.dyn_ref::<web_sys::HtmlElement>().is_some());
 
     // The footer's links go to the main site over https.
     let terms = document
@@ -87,12 +89,21 @@ async fn the_app_mounts_the_map_and_a_sibling_route_unmounts_it() {
         .expect("a selector");
     assert!(terms.is_some());
 
-    // A sibling route unmounts the map.
-    go_to("/elsewhere");
+    // A sibling route unmounts the map (clicked, never pushed by hand).
+    follow_foreign_link("/elsewhere");
     until("the map unmounts", || !page_text().contains(STUB)).await;
     assert!(page_text().contains("Not found"), "{}", page_text());
 
-    // And the map comes back.
-    go_to("/map/sim");
+    // And the map comes back by a click on the rail's Map link, as a person
+    // does it (the router follows the anchor, no state is pushed by hand).
+    let link = document
+        .query_selector(r#"a[href="/map"]"#)
+        .expect("a selector")
+        .expect("the rail's Map link");
+    link.dyn_into::<web_sys::HtmlElement>()
+        .expect("an element")
+        .click();
     until("the map mounts again", || page_text().contains(STUB)).await;
+    // The address follows the render by a tick.
+    until("the address is /map", || pathname() == "/map").await;
 }
