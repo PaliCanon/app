@@ -8,10 +8,24 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
+[[bin]]
+name = "palicanon-app-csr"
+path = "src/main.rs"
+
 [dependencies]
 leptos = { workspace = true, features = ["csr"] }
 leptos_router.workspace = true
 palicanon-ui-lib.workspace = true
+console_error_panic_hook = "0.1"
+
+# The native route tests render the routes on the server side of Leptos
+# (the router reads a request URL, not a browser); the shell itself needs a
+# browser and is not rendered natively.
+[dev-dependencies]
+any_spawner = { version = "0.3", features = ["tokio"] }
+leptos = { workspace = true, features = ["ssr"] }
+leptos_router = { workspace = true, features = ["ssr"] }
+tokio = { version = "1", features = ["rt"] }
 
 [lints]
 workspace = true
