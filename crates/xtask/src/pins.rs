@@ -47,8 +47,12 @@ pub enum PinsError {
     Missing(String),
     /// More than one version or source of the package is built.
     Several(String, Vec<String>),
-    /// The package comes from a path or a registry, not a git tag.
+    /// The package comes from a path or a registry, not git.
     NotGit(String, Option<String>),
+    /// The package comes from git, but not at an exact tag's revision (a
+    /// branch, a bare rev, or a source without the 40-digit revision the
+    /// lockfile records).
+    NotTagged(String, String),
     /// A feature that must be on is off.
     FeatureOff(String),
     /// A feature that must be off is on.
@@ -70,6 +74,9 @@ impl std::fmt::Display for PinsError {
             }
             Self::NotGit(name, source) => {
                 write!(f, "{name} is not a git dependency (source: {source:?})")
+            }
+            Self::NotTagged(name, source) => {
+                write!(f, "{name} is not at a tag's revision (source: {source})")
             }
             Self::FeatureOff(feature) => write!(f, "{UI_LIB} must have `{feature}` on"),
             Self::FeatureOn(feature) => write!(f, "{UI_LIB} must not have `{feature}` on"),
@@ -121,7 +128,11 @@ pub fn read(metadata: &str, map_crate: Option<&str>) -> Result<Pins, PinsError> 
     check_source(ui_lib.0)?;
     check_features(&ui_lib.1.features)?;
     let map = match map_crate {
-        Some(name) => Some(directory(built_once(&metadata, resolve, name)?.0)),
+        Some(name) => {
+            let (package, _) = built_once(&metadata, resolve, name)?;
+            check_source(package)?;
+            Some(directory(package))
+        }
         None => None,
     };
     Ok(Pins {
@@ -154,11 +165,31 @@ fn built_once<'a>(
     }
 }
 
-/// ui-lib must come from a git source (a tag), never a path or a registry.
+/// A pinned package comes from git at an exact tag: `git+<url>?tag=<tag>#<rev>`
+/// with the 40-digit revision the lockfile records. A path, a registry, a
+/// branch or a bare revision is refused.
 fn check_source(package: &Package) -> Result<(), PinsError> {
-    match &package.source {
-        Some(source) if source.starts_with("git+") => Ok(()),
-        other => Err(PinsError::NotGit(package.name.clone(), other.clone())),
+    let Some(source) = &package.source else {
+        return Err(PinsError::NotGit(package.name.clone(), None));
+    };
+    let Some(git) = source.strip_prefix("git+") else {
+        return Err(PinsError::NotGit(
+            package.name.clone(),
+            Some(source.clone()),
+        ));
+    };
+    let tagged = git.split_once('#').is_some_and(|(address, rev)| {
+        let has_tag = address.split_once('?').is_some_and(|(_, query)| {
+            query
+                .split('&')
+                .any(|part| part.strip_prefix("tag=").is_some_and(|tag| !tag.is_empty()))
+        });
+        has_tag && rev.len() == 40 && rev.bytes().all(|b| b.is_ascii_hexdigit())
+    });
+    if tagged {
+        Ok(())
+    } else {
+        Err(PinsError::NotTagged(package.name.clone(), source.clone()))
     }
 }
 
@@ -241,7 +272,7 @@ mod tests {
         let mut packages = vec![package(UI_LIB, Some(&src), "/co/ui-lib/9d07205")];
         let mut nodes = vec![node(UI_LIB, Some(&src), features)];
         if map {
-            let msrc = "git+ssh://git@github.com/PaliCanon/vizualisation.git?tag=v0.1.0#abc";
+            let msrc = "git+ssh://git@github.com/PaliCanon/vizualisation.git?tag=v0.1.0#2222222222222222222222222222222222222222";
             packages.push(package(
                 "palicanon-map",
                 Some(msrc),
@@ -341,6 +372,70 @@ mod tests {
         let mut v = metadata_with(&["csr"], REV_A, false);
         v["packages"][0]["source"] = json!("registry+https://github.com/rust-lang/crates.io-index");
         assert!(matches!(read_json(&v, None), Err(PinsError::NotGit(..))));
+    }
+
+    /// ui-lib's source replaced by `source`, as `cargo metadata` would print it.
+    fn with_ui_lib_source(source: &str) -> Value {
+        let mut v = metadata_with(&["csr"], REV_A, false);
+        v["packages"][0]["source"] = json!(source);
+        v["packages"][0]["id"] = json!(format!("{UI_LIB} {source}"));
+        v["resolve"]["nodes"][0]["id"] = json!(format!("{UI_LIB} {source}"));
+        v
+    }
+
+    #[test]
+    fn a_branch_a_bare_rev_or_a_short_rev_is_not_a_tag() {
+        let rev = REV_A;
+        for source in [
+            format!("git+ssh://git@github.com/PaliCanon/ui-lib.git?branch=main#{rev}"),
+            format!("git+ssh://git@github.com/PaliCanon/ui-lib.git?rev={rev}#{rev}"),
+            format!("git+ssh://git@github.com/PaliCanon/ui-lib.git#{rev}"),
+            "git+ssh://git@github.com/PaliCanon/ui-lib.git?tag=v0.3.0".to_string(),
+            "git+ssh://git@github.com/PaliCanon/ui-lib.git?tag=v0.3.0#9d07205".to_string(),
+            format!("git+ssh://git@github.com/PaliCanon/ui-lib.git?tag=#{rev}"),
+            format!(
+                "git+ssh://git@github.com/PaliCanon/ui-lib.git?tag=v0.3.0#{}",
+                "z".repeat(40)
+            ),
+        ] {
+            let v = with_ui_lib_source(&source);
+            assert!(
+                matches!(read_json(&v, None), Err(PinsError::NotTagged(..))),
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_tag_with_other_query_parts_is_accepted() {
+        let v = with_ui_lib_source(&git(REV_A).replace("?tag=v0.3.0", "?foo=1&tag=v0.3.0"));
+        assert!(read_json(&v, None).is_ok());
+    }
+
+    #[test]
+    fn the_map_crate_is_held_to_the_same_source_rule() {
+        for (source, path_source) in [
+            (
+                Some(
+                    "git+ssh://git@github.com/PaliCanon/vizualisation.git?branch=main#2222222222222222222222222222222222222222",
+                ),
+                false,
+            ),
+            (
+                Some("registry+https://github.com/rust-lang/crates.io-index"),
+                true,
+            ),
+            (None, true),
+        ] {
+            let mut v = metadata_with(&["csr"], REV_A, true);
+            v["packages"][1]["source"] = json!(source);
+            let err = read_json(&v, Some("palicanon-map")).unwrap_err();
+            if path_source {
+                assert!(matches!(err, PinsError::NotGit(..)), "{source:?}: {err}");
+            } else {
+                assert!(matches!(err, PinsError::NotTagged(..)), "{source:?}: {err}");
+            }
+        }
     }
 
     #[test]
