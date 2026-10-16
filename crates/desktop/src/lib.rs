@@ -5,6 +5,7 @@
 //! `https:` or `mailto:` address in the system browser.
 
 pub mod navigation;
+pub mod second_launch;
 
 use tauri::webview::NewWindowResponse;
 use tauri::{AppHandle, Manager, WebviewWindowBuilder};
@@ -45,13 +46,15 @@ fn create_window(app: &AppHandle) -> tauri::Result<()> {
 }
 
 /// A second launch brings the running window forward instead of opening
-/// another instance.
+/// another instance; with no window it is logged and ignored.
 fn focus_main(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
+    second_launch::handle_second_launch(app.get_webview_window(MAIN_WINDOW), |window| {
+        for step in [window.unminimize(), window.show(), window.set_focus()] {
+            if let Err(error) = step {
+                log::warn!("second launch: cannot bring the window forward: {error}");
+            }
+        }
+    });
 }
 
 /// Runs the app.
