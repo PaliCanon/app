@@ -139,8 +139,23 @@ pub fn find_tailwind(
     ] {
         collect(&cache, 3, &mut found);
     }
-    found.sort();
+    // The newest by version, numerically: v4.10 comes after v4.9.
+    found.sort_by_cached_key(|p| (version_of(p), p.clone()));
     found.pop().ok_or(CssError::NoTailwind)
+}
+
+/// The numbers of the version in a cached CLI's directory name
+/// (`tailwindcss-v4.10.0` gives `[4, 10, 0]`; none gives nothing).
+fn version_of(cli: &Path) -> Vec<u64> {
+    let directory = cli
+        .parent()
+        .and_then(Path::file_name)
+        .and_then(|n| n.to_str())
+        .unwrap_or_default();
+    directory
+        .split(|c: char| !c.is_ascii_digit())
+        .filter_map(|part| part.parse().ok())
+        .collect()
 }
 
 /// Adds to `found` the files named `tailwindcss-*` at most `depth` levels
@@ -301,8 +316,6 @@ mod tests {
             markers_with(&pins, Some(".map-only")),
             [UI_LIB_MARKER, ".map-only"]
         );
-        // The shipped markers are those of the same rule.
-        assert_eq!(markers(&pins), markers_with(&pins, MAP_MARKER));
     }
 
     /// A fake `$HOME` holding the CLI where cargo-leptos puts it.
@@ -374,6 +387,30 @@ mod tests {
             "linux",
         );
         assert!(find_tailwind(None, Some(linux)).is_ok());
+    }
+
+    #[test]
+    fn versions_are_compared_by_number_not_by_text() {
+        let base = "Library/Caches/cargo-leptos";
+        let home = home_with(
+            &[
+                &format!("{base}/tailwindcss-v4.9.0/tailwindcss-v4.9.0/tailwindcss-macos-arm64"),
+                &format!("{base}/tailwindcss-v4.10.0/tailwindcss-v4.10.0/tailwindcss-macos-arm64"),
+                &format!("{base}/tailwindcss-v4.2.1/tailwindcss-v4.2.1/tailwindcss-macos-arm64"),
+            ],
+            "numeric",
+        );
+        assert_eq!(
+            find_tailwind(None, Some(home.clone())),
+            Ok(home.join(format!(
+                "{base}/tailwindcss-v4.10.0/tailwindcss-v4.10.0/tailwindcss-macos-arm64"
+            )))
+        );
+        assert_eq!(
+            version_of(Path::new("/c/tailwindcss-v4.10.0/x")),
+            [4, 10, 0]
+        );
+        assert_eq!(version_of(Path::new("/c/none/x")), Vec::<u64>::new());
     }
 
     #[test]

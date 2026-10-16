@@ -239,15 +239,42 @@ pub fn run_metadata_with(
     cargo: &std::ffi::OsStr,
     workspace: &std::path::Path,
 ) -> Result<String, PinsError> {
+    run_metadata_in(cargo, workspace, &std::env::temp_dir())
+}
+
+/// [`run_metadata_with`] with the directory for its scratch files given. The
+/// scratch directory is removed whatever happens: cargo missing, failing, or
+/// its output unreadable.
+///
+/// # Errors
+/// As [`run_metadata`].
+pub fn run_metadata_in(
+    cargo: &std::ffi::OsStr,
+    workspace: &std::path::Path,
+    base: &std::path::Path,
+) -> Result<String, PinsError> {
     static CALLS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let failed = |e: std::io::Error| PinsError::Metadata(e.to_string());
-    // Output goes to files, not pipes: a daemon that cargo starts and leaves
-    // behind (sccache's server, under `RUSTC_WRAPPER`) inherits a pipe and
-    // keeps it open, and reading a pipe to its end would wait for the daemon.
-    // The wrapper is also switched off: `cargo metadata` compiles nothing.
     let call = CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("xtask-metadata-{}-{call}", std::process::id()));
-    std::fs::create_dir_all(&dir).map_err(failed)?;
+    let dir = base.join(format!("xtask-metadata-{}-{call}", std::process::id()));
+    let result = std::fs::create_dir_all(&dir)
+        .map_err(|e| PinsError::Metadata(e.to_string()))
+        .and_then(|()| metadata_into(cargo, workspace, &dir));
+    let _ = std::fs::remove_dir_all(&dir);
+    result
+}
+
+/// Runs `cargo metadata` with its output in files of `dir`.
+///
+/// Output goes to files, not pipes: a daemon that cargo starts and leaves
+/// behind (sccache's server, under `RUSTC_WRAPPER`) inherits a pipe and keeps
+/// it open, and reading a pipe to its end would wait for the daemon. The
+/// wrapper is also switched off: `cargo metadata` compiles nothing.
+fn metadata_into(
+    cargo: &std::ffi::OsStr,
+    workspace: &std::path::Path,
+    dir: &std::path::Path,
+) -> Result<String, PinsError> {
+    let failed = |e: std::io::Error| PinsError::Metadata(e.to_string());
     let (out_path, err_path) = (dir.join("stdout"), dir.join("stderr"));
     let status = std::process::Command::new(cargo)
         .current_dir(workspace)
@@ -260,13 +287,11 @@ pub fn run_metadata_with(
         .stderr(std::fs::File::create(&err_path).map_err(failed)?)
         .status()
         .map_err(failed)?;
-    let stdout = std::fs::read_to_string(&out_path);
     let stderr = std::fs::read_to_string(&err_path).unwrap_or_default();
-    let _ = std::fs::remove_dir_all(&dir);
     if !status.success() {
         return Err(PinsError::Metadata(stderr.trim().to_string()));
     }
-    stdout.map_err(failed)
+    std::fs::read_to_string(&out_path).map_err(failed)
 }
 
 /// The pins of the workspace at `workspace`: [`run_metadata`], then [`read`]
@@ -563,6 +588,40 @@ mod tests {
             "waited for the daemon: {:?}",
             started.elapsed()
         );
+    }
+
+    #[test]
+    fn the_scratch_directory_is_removed_on_every_outcome() {
+        let base = std::env::temp_dir().join(format!("xtask-scratch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let leftovers = || std::fs::read_dir(&base).unwrap().count();
+        let here = std::path::Path::new(".");
+        let ok = cargo_with_a_daemon("scratch-ok");
+        assert!(run_metadata_in(ok.as_os_str(), here, &base).is_ok());
+        assert_eq!(leftovers(), 0, "after success");
+        let missing = run_metadata_in("/nonexistent/cargo".as_ref(), here, &base);
+        assert!(missing.is_err());
+        assert_eq!(leftovers(), 0, "after a cargo that cannot start");
+        let failing = fake_cargo("scratch-fail", "echo oops >&2\nexit 3\n");
+        assert!(run_metadata_in(failing.as_os_str(), here, &base).is_err());
+        assert_eq!(leftovers(), 0, "after a cargo that fails");
+        // A workspace that is not a directory: the spawn fails after the files exist.
+        let no_workspace = std::path::Path::new("/nonexistent/workspace");
+        assert!(run_metadata_in(ok.as_os_str(), no_workspace, &base).is_err());
+        assert_eq!(leftovers(), 0, "after a spawn error");
+    }
+
+    /// A `cargo` script with `body` as its commands.
+    fn fake_cargo(name: &str, body: &str) -> std::path::PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let dir =
+            std::env::temp_dir().join(format!("xtask-fake-cargo-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = dir.join("cargo");
+        std::fs::write(&script, format!("#!/bin/sh\n{body}")).unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        script
     }
 
     #[test]

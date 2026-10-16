@@ -12,7 +12,13 @@ fn main() -> ExitCode {
     let root = root.canonicalize().unwrap_or(root);
     let result = xtask::pins::of_workspace(&root)
         .map_err(Into::into)
-        .and_then(|pins| xtask::run(&task, &root, &pins, xtask::css::tailwind_binary));
+        .and_then(|pins| {
+            // `XTASK_DATA_OUT` moves the staging directory (the tests aim it
+            // at a place that cannot be written).
+            let out = std::env::var_os("XTASK_DATA_OUT")
+                .map_or_else(|| root.join("target/map-data"), std::path::PathBuf::from);
+            xtask::run(&task, &root, &pins, xtask::css::tailwind_binary, &out)
+        });
     match result {
         Ok(line) => {
             println!("{line}");

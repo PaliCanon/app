@@ -12,7 +12,8 @@ pub mod pins;
 
 /// Runs the task `task` over `pins` and returns the line it reports.
 /// `tailwind` finds the Tailwind CLI, only asked by `css`. `root` is the
-/// workspace root: the output goes under its `target/`.
+/// workspace root: the CSS goes under its `target/`; `data_out` is where
+/// `data` stages the map's files.
 ///
 /// # Errors
 /// An unknown task, or whatever the task refuses: a missing source or data
@@ -22,6 +23,7 @@ pub fn run(
     root: &Path,
     pins: &pins::Pins,
     tailwind: impl FnOnce() -> Result<PathBuf, css::CssError>,
+    data_out: &Path,
 ) -> Result<String, Box<dyn Error>> {
     match task {
         "pins" => {
@@ -34,15 +36,12 @@ pub fn run(
             ))
         }
         "css" => Ok(css::build(root, pins, &tailwind()?)?.display().to_string()),
-        "data" => Ok(
-            match data::stage(pins.map.as_deref(), &root.join("target/map-data"))? {
-                data::Staged::Skipped => {
-                    "xtask data: skipped, the front does not depend on the map crate yet"
-                        .to_string()
-                }
-                data::Staged::Copied(n) => format!("xtask data: {n} files in target/map-data"),
-            },
-        ),
+        "data" => Ok(match data::stage(pins.map.as_deref(), data_out)? {
+            data::Staged::Skipped => {
+                "xtask data: skipped, the front does not depend on the map crate yet".to_string()
+            }
+            data::Staged::Copied(n) => format!("xtask data: {n} files in {}", data_out.display()),
+        }),
         other => Err(format!("unknown task {other:?} (pins, css, data)").into()),
     }
 }
@@ -75,16 +74,37 @@ mod tests {
     #[test]
     fn an_unknown_task_is_an_error() {
         let (root, pins) = workspace("unknown");
-        let err = run("nope", &root, &pins, || Err(css::CssError::NoTailwind)).unwrap_err();
+        let err = run(
+            "nope",
+            &root,
+            &pins,
+            || Err(css::CssError::NoTailwind),
+            &root.join("out"),
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("unknown task"), "{err}");
     }
 
     #[test]
     fn css_fails_without_a_tailwind_and_with_a_failing_one() {
         let (root, pins) = workspace("css");
-        let err = run("css", &root, &pins, || Err(css::CssError::NoTailwind)).unwrap_err();
+        let err = run(
+            "css",
+            &root,
+            &pins,
+            || Err(css::CssError::NoTailwind),
+            &root.join("out"),
+        )
+        .unwrap_err();
         assert_eq!(err.to_string(), css::CssError::NoTailwind.to_string());
-        let err = run("css", &root, &pins, || Ok("/usr/bin/false".into())).unwrap_err();
+        let err = run(
+            "css",
+            &root,
+            &pins,
+            || Ok("/usr/bin/false".into()),
+            &root.join("out"),
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("tailwind exited"), "{err}");
     }
 
@@ -92,24 +112,52 @@ mod tests {
     fn css_fails_on_a_missing_source() {
         let (root, pins) = workspace("css-source");
         std::fs::remove_dir_all(root.join("front/src")).unwrap();
-        let err = run("css", &root, &pins, || Ok("/usr/bin/true".into())).unwrap_err();
+        let err = run(
+            "css",
+            &root,
+            &pins,
+            || Ok("/usr/bin/true".into()),
+            &root.join("out"),
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("does not exist"), "{err}");
     }
 
     #[test]
     fn data_fails_on_a_missing_file_and_is_skipped_without_a_map() {
         let (root, mut pins) = workspace("data");
-        let skipped = run("data", &root, &pins, || Err(css::CssError::NoTailwind)).unwrap();
+        let skipped = run(
+            "data",
+            &root,
+            &pins,
+            || Err(css::CssError::NoTailwind),
+            &root.join("out"),
+        )
+        .unwrap();
         assert!(skipped.contains("skipped"), "{skipped}");
         pins.map = Some(root.join("map"));
-        let err = run("data", &root, &pins, || Err(css::CssError::NoTailwind)).unwrap_err();
+        let err = run(
+            "data",
+            &root,
+            &pins,
+            || Err(css::CssError::NoTailwind),
+            &root.join("out"),
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("map data missing"), "{err}");
     }
 
     #[test]
     fn pins_reports_the_directories() {
         let (root, pins) = workspace("pins");
-        let line = run("pins", &root, &pins, || Err(css::CssError::NoTailwind)).unwrap();
+        let line = run(
+            "pins",
+            &root,
+            &pins,
+            || Err(css::CssError::NoTailwind),
+            &root.join("out"),
+        )
+        .unwrap();
         assert!(
             line.contains("ui_lib=") && line.contains("front="),
             "{line}"
