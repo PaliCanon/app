@@ -21,6 +21,8 @@ tauri-plugin-single-instance = "2"
 url = "2"
 
 [dev-dependencies]
+# The mock runtime, to send the webview's IPC messages through the real ACL.
+tauri = { version = "2", features = ["test"] }
 # The navigation rule is run over the front's real links (tests/links.rs).
 palicanon-app-front = { path = "../front" }
 palicanon-ui-lib.workspace = true
