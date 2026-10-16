@@ -26,6 +26,7 @@ flowchart LR
 | Plan | done | orchestrator: one Sonnet lane (new workspace, files new and coupled); the /map route mounts a stub until vizualisation 012's first tag, then the tag in one commit; builds under nice, -j 4 |
 | Build | done | lane:shell (Sonnet): 4007c8a … b976001 (12 commits). .app at target/release/bundle/macos/PaliCanon.app (10.59 MiB, arm64, macOS 13+), /map a stub behind crates/front/src/map_mount.rs. Checks exit 0: fmt, leptosfmt, clippy native + front wasm32, tests 60 (desktop 7 + config 9, front 16, identity 5, xtask 23), doc, MSRV 1.88 check, deny, browser 1, trunk release (445 KB wasm). Opened: starts, single instance works; a probe build in the real WKWebView: / → /map, no CSP violation, window.open http/file null, location to http dropped. Found and fixed: Tauri answers a missing file with index.html 200 (BundledData refuses text/html) |
 | Rulings | done | orchestrator: all accepted — xtask data staged in target/map-data then Trunk copy-dir; deny.toml (macOS + wasm32 graph, seven advisories ignored with reasons via tauri-utils and leptos, MPL-2.0 allowed per crate for cssparser, cssparser-macros, dtoa-short, option-ext, selectors: file-level copyleft, unmodified); CI written for macOS runners (not run: Actions blocked); the map crate layout <dir>/src and <dir>/public (confirmed by vizualisation's message); the spike's icons; the window built in Rust (create: false) for the navigation hooks; a small strings table; ui-lib version field for deny; the cargo xtask alias; the executable name palicanon-app-desktop |
+| Review 1 | fail | reviewer: d5b581aa63a1b4f v1; deep 10182/10208/10221 (Δ and T in each batch, security proofs and build guards), sage 10244/10258/10272 (thin). Rulings in ### Round 1; Fix round 1 |
 
 ## Design
 Viewer: app-003-desktop-shell/design (d185d447c3f9e4e), v6 — validated by the user 2026-10-16 («Sinon commence le draft»; «macOS 13 minimum n'est pas un souci»; «Ajoute la carte» for 005's routes). v4 (Learn and Search, with /map added) is kept for task 005.
@@ -59,5 +60,19 @@ flowchart TB
 ## Lanes
 
 ## Reviews
+
+### Round 1 — 2026-10-16
+Voices: deep (10182, 10208, 10221), sage (10244, 10258, 10272: thin). Rulings (orchestrator), taken in:
+- J1 no door (deep A1): the proof that the webview has no command is the generated ACL, not a filename grep: a test reads what tauri-build writes (capabilities/ACL under crates/desktop/gen or the resolved context) and asserts no permission is granted; plus a browser-side check in the probe build or a wasm test that `invoke("plugin:opener|open_url")` is rejected, if it can run headless (else say why).
+- J2 CSP (deep A6): the CSP test is an allowlist: exactly the five directives with exactly v6's sources; any extra directive or source fails.
+- J3 opener failure (deep A3): `decide` stays pure; a refused system open (Err) is logged distinctly from a designed Drop (log via the app's log, not only eprintln), test of the mapping.
+- J4 second launch (deep A4): when `main` is absent at the second launch, the case is logged and ignored, by an explicit branch with a test.
+- J5 `is_data` (deep B): a 200 is data only with a present content-type that is not text/html; `(200, None)` → not data (test updated).
+- J6 navigation joins (deep B): a test runs the footer's real hrefs through `navigation::decide` (all OpenOutside); the browser test clicks the rail's /map link instead of pushing state.
+- J7 pins (deep C1, C2): `check_source` applies to every pinned package (the map crate when added): a git source at an exact tag rev the lockfile records, not just `git+`; no path or registry source.
+- J8 (deep C4): front/src comes from pins (the workspace member's manifest dir from cargo metadata), no literal path.
+- J9 build guards (deep C): the xtask binary's exit code is tested (a failing css or data step → non-zero); the tautological markers test replaced by one asserting markers() reads pins.map; tailwind_binary's two failures and the cache walk tested; FILES asserted against the design's six literal names; DataError::Failed tested.
+- J10 doc (deep B3): pins' doc says the lockstep check is over the wasm32 graph (native dev-dependencies may unify ssr there).
+Ruled out: http://tauri.localhost (Windows/Android, later targets; noted in the navigation rule's doc instead); BundledData not wired and the dead map guards (by design until vizualisation 012's tag; the tag commit wires them and adds vizualisation to the private-deps action's repositories); distinct markers for the stub's children (the stub is replaced by MapRoutes).
 
 ## Merge
