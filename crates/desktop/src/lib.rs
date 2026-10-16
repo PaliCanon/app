@@ -22,6 +22,20 @@ fn open_outside<R: Runtime>(app: &AppHandle<R>, address: &str) -> Result<(), Str
         .map_err(|error| error.to_string())
 }
 
+/// The webview's answer to a request for a new window: the navigation rule's
+/// answer ([`navigation::allow_new_window`], which is never yes), as Tauri's
+/// response. Kept apart from the closure so it is tested.
+pub fn new_window_response<R: Runtime>(
+    url: &url::Url,
+    open: impl FnOnce(&str) -> Result<(), String>,
+) -> NewWindowResponse<R> {
+    if navigation::allow_new_window(url, open) {
+        NewWindowResponse::Allow
+    } else {
+        NewWindowResponse::Deny
+    }
+}
+
 /// Builds the one window from the configuration, with the navigation rule
 /// on every navigation and every request for a new window.
 ///
@@ -44,8 +58,7 @@ pub fn create_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             navigation::allow_navigation(url, |address| open_outside(&for_navigation, address))
         })
         .on_new_window(move |url, _features| {
-            navigation::allow_new_window(&url, |address| open_outside(&for_new_window, address));
-            NewWindowResponse::Deny
+            new_window_response(&url, |address| open_outside(&for_new_window, address))
         })
         .build()?;
     Ok(())
@@ -92,4 +105,35 @@ pub fn run() {
         }))
         .run(tauri::generate_context!())
         .expect("run the PaliCanon window");
+}
+
+#[cfg(test)]
+mod tests {
+    use tauri::test::MockRuntime;
+
+    use super::*;
+
+    fn response(address: &str, opened: &mut Vec<String>) -> NewWindowResponse<MockRuntime> {
+        let url = url::Url::parse(address).expect("an address");
+        new_window_response(&url, |a| {
+            opened.push(a.to_string());
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn every_request_for_a_new_window_is_denied() {
+        for (address, opens) in [
+            ("https://suttacentral.net/dn1", 1),
+            ("mailto:a@b.example", 1),
+            ("tauri://localhost/map", 0),
+            ("javascript:alert(1)", 0),
+            ("file:///etc/hosts", 0),
+        ] {
+            let mut opened = Vec::new();
+            let answer = response(address, &mut opened);
+            assert!(matches!(answer, NewWindowResponse::Deny), "{address}");
+            assert_eq!(opened.len(), opens, "{address}");
+        }
+    }
 }

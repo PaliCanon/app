@@ -50,9 +50,11 @@ pub enum Outcome {
     Opened,
     /// Handed to the system browser, which refused it (the reason).
     OpenRefused(String),
-    /// Designed to be dropped: not an address the app follows, or a new
-    /// window (never created).
+    /// Designed to be dropped: not an address the app follows.
     Dropped,
+    /// A request for a new window onto the app's own address: denied (a window
+    /// is never created), told apart from a drop in the log.
+    WindowDenied,
 }
 
 /// Applies [`decide`] to a navigation: `open` is called with the address
@@ -69,16 +71,19 @@ pub fn handle(url: &Url, open: impl FnOnce(&str) -> Result<(), String>) -> Outco
 }
 
 /// Applies [`decide`] to a request for a new window: the window is never
-/// created, so the app's own address is dropped too.
+/// created, so the app's own address is [`Outcome::WindowDenied`] (it would
+/// stay in a navigation, which is not what a new window asks).
 pub fn handle_new_window(url: &Url, open: impl FnOnce(&str) -> Result<(), String>) -> Outcome {
     match handle(url, open) {
-        Outcome::Stayed => Outcome::Dropped,
+        Outcome::Stayed => Outcome::WindowDenied,
         other => other,
     }
 }
 
 /// The log line for an outcome: a level and a message, distinct for a
-/// designed drop (a warning) and for a refusal by the system (an error).
+/// designed drop or a denied window (warnings, with their own words) and for a
+/// refusal by the system (an error). An address that stays is logged at
+/// debug, below the plugin's `info` filter: the app's own pages are not news.
 pub fn record(url: &Url, outcome: &Outcome) -> (log::Level, String) {
     match outcome {
         Outcome::Stayed => (log::Level::Debug, format!("navigation stays: {url}")),
@@ -93,6 +98,10 @@ pub fn record(url: &Url, outcome: &Outcome) -> (log::Level, String) {
         Outcome::Dropped => (
             log::Level::Warn,
             format!("dropped by the navigation rule: {url}"),
+        ),
+        Outcome::WindowDenied => (
+            log::Level::Warn,
+            format!("new window denied (the app opens none): {url}"),
         ),
     }
 }
@@ -236,9 +245,12 @@ mod tests {
     }
 
     #[test]
-    fn a_new_window_for_the_apps_own_address_is_dropped() {
+    fn a_new_window_for_the_apps_own_address_is_denied_not_dropped() {
         let url = Url::parse("tauri://localhost/map").unwrap();
+        assert_eq!(handle_new_window(&url, accepted), Outcome::WindowDenied);
+        let url = Url::parse("javascript:alert(1)").unwrap();
         assert_eq!(handle_new_window(&url, accepted), Outcome::Dropped);
+        let url = Url::parse("tauri://localhost/map").unwrap();
         let url = Url::parse("https://a.example/").unwrap();
         assert_eq!(
             handle_new_window(&url, refused),
@@ -263,7 +275,14 @@ mod tests {
             "{refused_text}"
         );
         assert_ne!(drop_text, refused_text);
+        // A denied window is a warning with its own words, not a "dropped".
+        let (denied_level, denied_text) = record(&url, &Outcome::WindowDenied);
+        assert_eq!(denied_level, log::Level::Warn);
+        assert!(denied_text.contains("new window denied"), "{denied_text}");
+        assert!(!denied_text.contains("dropped"), "{denied_text}");
         assert_eq!(record(&url, &Outcome::Opened).0, log::Level::Info);
+        // The app's own pages are below the plugin's info filter (lib.rs): not logged.
+        assert!(record(&url, &Outcome::Stayed).0 > log::Level::Info);
         assert_eq!(record(&url, &Outcome::Stayed).0, log::Level::Debug);
     }
 
