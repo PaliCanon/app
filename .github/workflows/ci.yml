@@ -134,7 +134,7 @@ jobs:
       - run: cargo doc --locked --no-deps
 
   msrv:
-    name: msrv (1.88)
+    name: msrv (1.91)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
@@ -143,7 +143,7 @@ jobs:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
       - uses: ./.github/actions/placeholder-dist
-      - uses: dtolnay/rust-toolchain@1.88
+      - uses: dtolnay/rust-toolchain@1.91
       # --locked: the committed Cargo.lock is what the MSRV claim is verified
       # against; a fresh resolution could pull a dependency with a higher MSRV.
       - run: cargo check --locked

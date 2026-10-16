@@ -81,7 +81,7 @@ The isolated toolchain, apart from the system Rust:
 export RUSTUP_HOME=$HOME/.rustup-pc/rustup CARGO_HOME=$HOME/.rustup-pc/cargo PATH=$HOME/.rustup-pc/cargo/bin:$PATH RUSTC_WRAPPER=sccache
 ```
 
-MSRV 1.88 (`rust-version` in `Cargo.toml`).
+MSRV 1.91 (`rust-version` in `Cargo.toml`; search-front's fragment tag requires it).
 
 ## Checks
 
@@ -94,7 +94,7 @@ cargo clippy --locked --all-targets -- -D warnings
 cargo clippy --locked -p palicanon-app-front --lib --bins --target wasm32-unknown-unknown -- -D warnings
 cargo test --locked
 RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps
-cargo +1.88 check --locked                      # MSRV
+cargo +1.91 check --locked                      # MSRV
 cargo deny check advisories bans sources licenses
 (cd crates/front && trunk build --release --cargo-profile wasm-release)
 cargo llvm-cov --locked --lcov --output-path lcov.info   # then Codecov

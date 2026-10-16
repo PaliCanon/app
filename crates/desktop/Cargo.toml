@@ -20,8 +20,8 @@ learn_core.workspace = true
 log = "0.4"
 palicanon-app-bridge = { path = "../bridge" }
 palicanon_app_identity = { path = "../identity" }
-# The lock on progress.lock: a safe flock (std's File::try_lock is Rust 1.89,
-# the MSRV is 1.88). Already in the graph through Tauri.
+# The lock on progress.lock: a safe flock (kept from when the MSRV was 1.88,
+# below std's File::try_lock; ruled to stay). Already in the graph through Tauri.
 rustix = { version = "1", features = ["fs"] }
 serde.workspace = true
 serde_json.workspace = true
