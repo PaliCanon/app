@@ -1,6 +1,6 @@
 //! Where the map is mounted: the vizualisation 012 fragment under `/map`. This
 //! is the only file that knows how: the host gives it the app's data
-//! ([`BundledData`]) and no head of its own (the window's title is the app's),
+//! ([`crate::data::BundledData`]) and no head of its own (the window's title is the app's),
 //! and mounts its routes (`''`, `:uid`, `sim`, `sim/:uid`) inside the parent
 //! route.
 
