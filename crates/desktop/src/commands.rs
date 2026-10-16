@@ -9,10 +9,11 @@
 // Tauri hands a command its managed state by value (`State` is a borrow).
 #![allow(clippy::needless_pass_by_value)]
 
-use palicanon_app_bridge::{ImportAnswer, LoadAnswer};
+use palicanon_app_bridge::{ImportAnswer, LoadAnswer, SearchAnswer, SearchRequest, SearchStatus};
 use tauri::{AppHandle, Runtime, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
+use crate::engine::Engine;
 use crate::files;
 use crate::writer::Writer;
 
@@ -100,4 +101,33 @@ fn show_failure<R: Runtime>(app: &AppHandle<R>, why: &str) {
         .title("PaliCanon")
         .kind(MessageDialogKind::Error)
         .show(|_| {});
+}
+
+/// `search(request)`: one search of the local engine (started at the first
+/// request, then kept), off the async runtime's threads.
+///
+/// # Errors
+/// The blocking task could not run.
+#[tauri::command]
+pub async fn search(
+    engine: State<'_, Engine>,
+    request: SearchRequest,
+) -> Result<SearchAnswer, String> {
+    let engine = engine.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || engine.search(&request))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `search_status()`: starts the engine if needed and answers once its
+/// model has loaded or failed: whether it serves, and serves meaning.
+///
+/// # Errors
+/// The engine could not start or stopped twice.
+#[tauri::command]
+pub async fn search_status(engine: State<'_, Engine>) -> Result<SearchStatus, String> {
+    let engine = engine.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || engine.status())
+        .await
+        .map_err(|e| e.to_string())?
 }

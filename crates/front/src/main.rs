@@ -17,6 +17,7 @@ async fn start() {
     use palicanon_app_front::app::App;
     use palicanon_app_front::files::AppFiles;
     use palicanon_app_front::progress::AppStore;
+    use palicanon_app_front::search::AppSearch;
     use palicanon_app_front::tauri;
 
     let answer = tauri::progress_load().await;
@@ -24,5 +25,6 @@ async fn start() {
     let store = AppStore::new(answer, progress);
     tauri::listen_progress(store.clone());
     let files = AppFiles::new(files);
-    palicanon_ui_lib::csr::mount(move || view! { <App store=store files=files /> });
+    let search = AppSearch::new(std::sync::Arc::new(tauri::TauriSearch));
+    palicanon_ui_lib::csr::mount(move || view! { <App store=store files=files search=search /> });
 }

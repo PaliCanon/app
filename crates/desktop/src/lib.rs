@@ -8,6 +8,7 @@
 
 pub mod commands;
 pub mod disk;
+pub mod engine;
 pub mod files;
 pub mod navigation;
 pub mod second_launch;
@@ -114,13 +115,37 @@ fn progress_writer<R: Runtime>(app: &AppHandle<R>, dir: PathBuf) -> Writer {
     )
 }
 
+/// The local search engine: `yuga-sidecar` beside the app's executable
+/// (Tauri's `externalBin`, `Contents/MacOS/` in the bundle), the store and
+/// the model in the bundle's resources (`yuga/store`, `yuga/model`), read
+/// only. Nothing starts until the first search or status; a missing file
+/// makes the start fail, and Search answers `Failed`.
+fn search_engine<R: Runtime>(app: &AppHandle<R>) -> engine::Engine {
+    let resources = app.path().resource_dir().unwrap_or_default();
+    let binary = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join(engine::BINARY)))
+        .unwrap_or_default();
+    engine::Engine::new(
+        engine::SidecarSpawn {
+            binary,
+            store: resources.join("yuga/store"),
+            model: resources.join("yuga/model"),
+        },
+        engine::POLL,
+    )
+}
+
 /// What the app does on `RunEvent::Exit` (Cmd-Q, the last window closed):
-/// the progress writer's exit write.
+/// the progress writer's exit write, then the search engine killed.
 pub fn on_run_event<R: Runtime>(app: &AppHandle<R>, event: &RunEvent) {
-    if let RunEvent::Exit = event
-        && let Some(writer) = app.try_state::<Writer>()
-    {
-        writer.exit();
+    if let RunEvent::Exit = event {
+        if let Some(writer) = app.try_state::<Writer>() {
+            writer.exit();
+        }
+        if let Some(engine) = app.try_state::<engine::Engine>() {
+            engine.shutdown();
+        }
     }
 }
 
@@ -152,6 +177,8 @@ pub fn configure<R: Runtime>(
             commands::progress_save,
             commands::export_file,
             commands::import_file,
+            commands::search,
+            commands::search_status,
         ])
         .setup(move |app| {
             let dir = match data {
@@ -161,6 +188,7 @@ pub fn configure<R: Runtime>(
             let writer = progress_writer(app.handle(), dir);
             writer.spawn();
             app.manage(writer);
+            app.manage(search_engine(app.handle()));
             create_window(app.handle())?;
             Ok(())
         })

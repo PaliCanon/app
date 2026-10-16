@@ -18,20 +18,24 @@ use crate::files::AppFiles;
 use crate::learn_mount::LearnMount;
 use crate::map_mount::{MapMount, MapSource};
 use crate::progress::AppStore;
+use crate::search::AppSearch;
+use crate::search_mount::SearchMount;
 use crate::{nav, strings};
 
 /// The app root over the progress `store` (built from `progress_load`
-/// before the mount) and the native `files`; the map's data is the files
-/// bundled in the app. Mounted by `palicanon_ui_lib::csr::mount`.
+/// before the mount), the native `files` and the local `search`; the map's
+/// data is the files bundled in the app. Mounted by `palicanon_ui_lib::csr::mount`.
 #[component]
 pub fn App(
     /// The progress, mirrored from the native writer.
     store: AppStore,
     /// Export and import through the native dialogs.
     files: AppFiles,
+    /// Search over the local engine.
+    search: AppSearch,
 ) -> impl IntoView {
     let data: Arc<dyn MapData> = Arc::new(BundledData::<BrowserFetch>::default());
-    view! { <AppWith data=data store=store files=files /> }
+    view! { <AppWith data=data store=store files=files search=search /> }
 }
 
 /// The app over given sources (the browser test gives fakes): the language
@@ -45,9 +49,12 @@ pub fn AppWith(
     store: AppStore,
     /// How a file moves in and out.
     files: AppFiles,
+    /// What answers the searches.
+    search: AppSearch,
 ) -> impl IntoView {
     provide_language();
     provide_context(MapSource(data));
+    provide_context(search);
     let store: SharedStore = Rc::new(store);
     let files: SharedFiles = Rc::new(files);
     view! {
@@ -91,6 +98,7 @@ pub fn AppRoutes() -> impl IntoView {
         <Routes fallback=NotFound>
             <Route path=path!("") view=|| view! { <Redirect path="/map" /> } />
             <LearnMount />
+            <SearchMount />
             <MapMount />
         </Routes>
     }
@@ -212,13 +220,29 @@ mod tests {
         }
     }
 
+    /// `/search` matches Search's route table entirely, nothing else does
+    /// (not rendered natively, for the same reason as Learn).
+    #[test]
+    fn search_routes_are_the_fragments_page_under_search() {
+        let owner = Owner::new();
+        owner.set();
+        let routes = SearchMount();
+        let (matched, rest) = routes.match_nested("/search");
+        assert!(matched.is_some() && rest.is_empty());
+        for path in ["/", "/searchx", "/search/nope", "/learn", "/map"] {
+            let (matched, rest) = routes.match_nested(path);
+            assert!(matched.is_none() || !rest.is_empty(), "{path}");
+        }
+    }
+
     #[test]
     fn another_address_is_not_found() {
         for path in [
             "/nope",
             "/learnx",
             "/learn/nope",
-            "/search",
+            "/searchx",
+            "/search/nope",
             "/map/sim/a/b",
             "/map/a/b/c",
         ] {

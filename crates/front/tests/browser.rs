@@ -23,6 +23,7 @@ use leptos::prelude::*;
 use palicanon_app_front::app::AppWith;
 use palicanon_app_front::files::{AppFiles, FilesPort};
 use palicanon_app_front::progress::{AppStore, ProgressPort};
+use palicanon_app_front::search::{AppSearch, PortFuture, SearchPort};
 use vizualisation::fragment::{MapData, MapFile};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -154,6 +155,21 @@ impl FilesPort for Ports {
     fn import(&self, _done: Box<dyn FnOnce(palicanon_app_bridge::ImportAnswer)>) {}
 }
 
+/// A search engine that is never ready (the browser test does not search).
+struct NoEngine;
+
+impl SearchPort for NoEngine {
+    fn search(
+        &self,
+        _request: palicanon_app_bridge::SearchRequest,
+    ) -> PortFuture<palicanon_app_bridge::SearchAnswer> {
+        Box::pin(async { Ok(palicanon_app_bridge::SearchAnswer::Cold) })
+    }
+    fn status(&self) -> PortFuture<palicanon_app_bridge::SearchStatus> {
+        Box::pin(async { Err("no engine in the browser test".to_string()) })
+    }
+}
+
 /// Mounts the app over the fake map data and fake ports, the progress empty.
 fn mount(data: Arc<dyn MapData>, ports: &Ports) {
     let store = AppStore::new(
@@ -161,7 +177,10 @@ fn mount(data: Arc<dyn MapData>, ports: &Ports) {
         std::rc::Rc::new(ports.clone()),
     );
     let files = AppFiles::new(std::rc::Rc::new(ports.clone()));
-    palicanon_ui_lib::csr::mount(move || view! { <AppWith data=data store=store files=files /> });
+    let search = AppSearch::new(Arc::new(NoEngine));
+    palicanon_ui_lib::csr::mount(
+        move || view! { <AppWith data=data store=store files=files search=search /> },
+    );
 }
 
 #[wasm_bindgen_test]

@@ -44,8 +44,9 @@ pub const LEARN_CRATE: &str = "learn_pali";
 /// The progress format's crate, from the same learn-pali tag as Learn.
 pub const LEARN_CORE: &str = "learn_core";
 
-/// Search's crate (search-front's fragment, by tag), once the front mounts it.
-pub const SEARCH_CRATE: Option<&str> = None;
+/// Search's crate (search-front's fragment, by tag); its directory is the
+/// repository's `app/`.
+pub const SEARCH_CRATE: Option<&str> = Some("search_front");
 
 /// The fragments the front mounts, by crate name.
 #[derive(Debug, Clone, Copy, Default)]
@@ -699,6 +700,10 @@ mod tests {
         let learn = pins.learn.expect("the front depends on Learn");
         assert!(learn.join("src/fragment.rs").is_file(), "{learn:?}");
         assert!(learn.join("public/lotus.png").is_file(), "{learn:?}");
+        // Search's checkout: its sources and the brand's icons.
+        let search = pins.search.expect("the front depends on Search");
+        assert!(search.join("src/fragment.rs").is_file(), "{search:?}");
+        assert!(search.join("public/brand").is_dir(), "{search:?}");
     }
 
     /// A `cargo` that leaves a daemon behind holding its output, as

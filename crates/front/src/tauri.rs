@@ -9,8 +9,10 @@ use std::rc::Rc;
 
 use palicanon_app_bridge::{
     EXPORT_FILE, ExportArgs, IMPORT_FILE, ImportAnswer, LoadAnswer, PROGRESS_LOAD, PROGRESS_SAVE,
-    PROGRESS_STATUS_EVENT, SaveArgs, StatusEvent,
+    PROGRESS_STATUS_EVENT, SEARCH, SEARCH_STATUS, SaveArgs, SearchAnswer, SearchRequest,
+    SearchStatus, StatusEvent,
 };
+use send_wrapper::SendWrapper;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use wasm_bindgen::prelude::*;
@@ -18,6 +20,7 @@ use wasm_bindgen_futures::JsFuture;
 
 use crate::files::FilesPort;
 use crate::progress::{AppStore, ProgressPort};
+use crate::search::{PortFuture, SearchPort};
 
 #[wasm_bindgen]
 extern "C" {
@@ -135,4 +138,29 @@ impl FilesPort for TauriFiles {
 /// The app's two ports, shared.
 pub fn ports() -> (Rc<dyn ProgressPort>, Rc<dyn FilesPort>) {
     (Rc::new(TauriProgress), Rc::new(TauriFiles))
+}
+
+/// `search`'s arguments: the request under its parameter's name.
+#[derive(Serialize)]
+struct SearchArgs {
+    request: SearchRequest,
+}
+
+/// The local engine, through `search` and `search_status`. The webview's
+/// futures are not `Send`: they are wrapped (the page's resource needs
+/// `Send`, and runs them on this one thread).
+pub struct TauriSearch;
+
+impl SearchPort for TauriSearch {
+    fn search(&self, request: SearchRequest) -> PortFuture<SearchAnswer> {
+        Box::pin(SendWrapper::new(async move {
+            invoke(SEARCH, &SearchArgs { request }).await
+        }))
+    }
+
+    fn status(&self) -> PortFuture<SearchStatus> {
+        Box::pin(SendWrapper::new(async move {
+            invoke(SEARCH_STATUS, &NoArgs {}).await
+        }))
+    }
 }

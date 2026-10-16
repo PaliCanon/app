@@ -106,6 +106,10 @@ fn the_progress_commands_through_the_real_ipc() {
     .unwrap_err();
     assert!(refusal.contains("over"), "{refusal}");
 
+    // No engine starts with the app: the first search starts it.
+    let engine = app.state::<palicanon_app_desktop::engine::Engine>();
+    assert!(!engine.running());
+
     palicanon_app_desktop::on_run_event(app.handle(), &tauri::RunEvent::Exit);
     let writer = app.state::<Writer>();
     writer.save(5, "late".into()).unwrap();

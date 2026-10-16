@@ -19,6 +19,7 @@ palicanon-ui-lib.workspace = true
 vizualisation.workspace = true
 learn_pali.workspace = true
 learn_core.workspace = true
+search_front.workspace = true
 palicanon-app-bridge = { path = "../bridge" }
 serde.workspace = true
 serde_json.workspace = true
