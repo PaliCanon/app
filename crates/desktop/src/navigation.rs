@@ -250,7 +250,6 @@ mod tests {
         assert_eq!(handle_new_window(&url, accepted), Outcome::WindowDenied);
         let url = Url::parse("javascript:alert(1)").unwrap();
         assert_eq!(handle_new_window(&url, accepted), Outcome::Dropped);
-        let url = Url::parse("tauri://localhost/map").unwrap();
         let url = Url::parse("https://a.example/").unwrap();
         assert_eq!(
             handle_new_window(&url, refused),
