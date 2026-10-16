@@ -1197,6 +1197,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c04f5d74368e4d0dfe06c45c8627c81bd7c317d52762d118fb9b3076f6420fd"
 
 [[package]]
+name = "palicanon-app-desktop"
+version = "0.1.0"
+dependencies = [
+ "url",
+]
+
+[[package]]
 name = "palicanon-app-front"
 version = "0.1.0"
 dependencies = [

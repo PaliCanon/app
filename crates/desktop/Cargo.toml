@@ -1,0 +1,15 @@
+[package]
+name = "palicanon-app-desktop"
+description = "The PaliCanon desktop app: a Tauri 2 shell around the front"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+url = "2"
+
+[lints]
+workspace = true
