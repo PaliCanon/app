@@ -18,7 +18,7 @@ serde_json = "1"
 # new ui-lib by a bump commit; never a path or a [patch]). `cargo xtask pins`
 # checks that exactly one revision of it is built, with `csr` and without
 # `ssr` or `hydrate`.
-palicanon-ui-lib = { git = "ssh://git@github.com/PaliCanon/ui-lib.git", tag = "v0.3.0", default-features = false, features = ["csr"] }
+palicanon-ui-lib = { git = "ssh://git@github.com/PaliCanon/ui-lib.git", tag = "v0.3.0", version = "0.3.0", default-features = false, features = ["csr"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
