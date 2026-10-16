@@ -131,6 +131,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn the_files_are_the_build_tasks_files() {
         assert_eq!(FILES, xtask::data::FILES);

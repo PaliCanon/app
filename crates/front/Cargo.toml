@@ -25,14 +25,21 @@ web-sys = { version = "0.3", features = ["Response", "Window"] }
 
 # The native route tests render the routes on the server side of Leptos
 # (the router reads a request URL, not a browser); the shell itself needs a
-# browser and is not rendered natively.
-[dev-dependencies]
-# The six map data files' names, one list for the build task and the front.
-xtask = { path = "../xtask" }
+# browser and is not rendered natively. They are native-only: with `ssr`
+# unified in, the wasm build would break.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 any_spawner = { version = "0.3", features = ["tokio"] }
 leptos = { workspace = true, features = ["ssr"] }
 leptos_router = { workspace = true, features = ["ssr"] }
 tokio = { version = "1", features = ["rt"] }
+# The six map data files' names, one list for the build task and the front.
+xtask = { path = "../xtask" }
+
+# The browser test (tests/browser.rs), run by wasm-bindgen-test-runner in a
+# headless Chrome.
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
+web-sys = { version = "0.3", features = ["Event", "History", "Document", "Element", "HtmlElement", "Location", "Window"] }
 
 [lints]
 workspace = true
