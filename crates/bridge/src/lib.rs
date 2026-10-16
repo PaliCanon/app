@@ -1,7 +1,8 @@
 //! The wire between the PaliCanon app's front (wasm, in the webview) and its
 //! desktop shell (native): the commands' names, what they answer, the
-//! progress status event and the caps. One shape, read by both sides, so the
-//! two cannot drift: the front serialises what the desktop deserialises.
+//! progress status and sync sign-in events and the caps. One shape, read by
+//! both sides, so the two cannot drift: the front serialises what the
+//! desktop deserialises.
 //!
 //! Serde only: this crate builds native and for `wasm32-unknown-unknown`.
 
@@ -23,16 +24,44 @@ pub const SEARCH: &str = "search";
 /// whether it serves meaning.
 pub const SEARCH_STATUS: &str = "search_status";
 
+/// `sync_sign_in()` → [`SignInStart`]: Google's sign-in begins (a loopback
+/// listener waits for its answer); the URL to show, and its outcome later
+/// as a [`SYNC_SIGN_IN_EVENT`].
+pub const SYNC_SIGN_IN: &str = "sync_sign_in";
+/// `sync_cancel()` → `()`: the sign-in waiting is stopped (its listener
+/// closed); its outcome comes as a [`SYNC_SIGN_IN_EVENT`], `Cancelled`.
+pub const SYNC_CANCEL: &str = "sync_cancel";
+/// `sync_pull()` → [`PullAnswer`]: the progress file in the learner's Drive.
+pub const SYNC_PULL: &str = "sync_pull";
+/// `sync_push(text)` → [`PushAnswer`]: `text` written as the progress file.
+pub const SYNC_PUSH: &str = "sync_push";
+/// `sync_account()` → [`SyncAccountAnswer`]: whether the sync exists in
+/// this build, and who is signed in. No network.
+pub const SYNC_ACCOUNT: &str = "sync_account";
+/// `sync_sign_out()` → `()`: the token revoked at Google (best effort),
+/// then forgotten (the Keychain item deleted).
+pub const SYNC_SIGN_OUT: &str = "sync_sign_out";
+
 /// Every command the webview may call, and nothing else (the capability
 /// grants exactly these).
-pub const COMMANDS: [&str; 6] = [
+pub const COMMANDS: [&str; 12] = [
     PROGRESS_LOAD,
     PROGRESS_SAVE,
     EXPORT_FILE,
     IMPORT_FILE,
     SEARCH,
     SEARCH_STATUS,
+    SYNC_SIGN_IN,
+    SYNC_CANCEL,
+    SYNC_PULL,
+    SYNC_PUSH,
+    SYNC_ACCOUNT,
+    SYNC_SIGN_OUT,
 ];
+
+/// The event the shell emits when a sign-in ends (signed in, cancelled,
+/// refused, timed out), its payload a [`SignInEvent`].
+pub const SYNC_SIGN_IN_EVENT: &str = "sync-sign-in";
 
 /// The event the native writer emits after each write attempt, its payload
 /// a [`StatusEvent`].
@@ -190,6 +219,85 @@ pub enum SearchAnswer {
     Failed(String),
 }
 
+/// Why a sync call failed; nothing local changes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SyncFailure {
+    /// No token, or Google refused it (expired, revoked): sign in again.
+    SignedOut,
+    /// The sign-in was cancelled, refused or timed out.
+    Cancelled,
+    /// Google could not be reached.
+    Network,
+    /// Google answered an error: what it said.
+    Drive(String),
+}
+
+/// What `sync_account` answers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SyncAccountAnswer {
+    /// This build has no sync (built without the OAuth client's secret):
+    /// no sync UI.
+    Unavailable,
+    /// Nobody is signed in.
+    SignedOut,
+    /// A refresh token is at hand; the email when it is known.
+    SignedIn {
+        /// The account's email, if Google gave it yet.
+        email: Option<String>,
+    },
+}
+
+/// What `sync_sign_in` answers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SignInStart {
+    /// The sign-in waits for Google's answer: `url` is shown to the learner
+    /// (and opened once in the system browser).
+    Started {
+        /// The sign-in's number: its [`SignInEvent`] carries it.
+        attempt: u64,
+        /// Google's sign-in address.
+        url: String,
+    },
+    /// The sign-in could not begin.
+    Failed(SyncFailure),
+}
+
+/// The payload of [`SYNC_SIGN_IN_EVENT`]: how the sign-in `attempt` ended.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SignInEvent {
+    /// The sign-in's number, as [`SignInStart::Started`] gave it.
+    pub attempt: u64,
+    /// Signed in (the email, if Google gave it), or why not.
+    pub outcome: Result<Option<String>, SyncFailure>,
+}
+
+/// What `sync_pull` answers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PullAnswer {
+    /// There is no progress file in the Drive yet.
+    Absent,
+    /// The file's text, as is.
+    File(String),
+    /// The pull failed.
+    Failed(SyncFailure),
+}
+
+/// The arguments of `sync_push`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PushArgs {
+    /// The progress, `learn_core`'s `State` JSON.
+    pub text: String,
+}
+
+/// What `sync_push` answers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PushAnswer {
+    /// The file holds `text` now.
+    Pushed,
+    /// The push failed.
+    Failed(SyncFailure),
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,7 +310,7 @@ mod tests {
     }
 
     #[test]
-    fn the_six_commands_are_the_designs() {
+    fn the_twelve_commands_are_the_designs() {
         assert_eq!(
             COMMANDS,
             [
@@ -211,10 +319,17 @@ mod tests {
                 "export_file",
                 "import_file",
                 "search",
-                "search_status"
+                "search_status",
+                "sync_sign_in",
+                "sync_cancel",
+                "sync_pull",
+                "sync_push",
+                "sync_account",
+                "sync_sign_out",
             ]
         );
         assert_eq!(PROGRESS_STATUS_EVENT, "progress-status");
+        assert_eq!(SYNC_SIGN_IN_EVENT, "sync-sign-in");
         assert_eq!(MAX_TEXT_BYTES, 4_194_304);
     }
 
@@ -327,5 +442,54 @@ mod tests {
         let hit: Hit = serde_json::from_str(line).expect("a hit");
         assert_eq!(hit.collection, None);
         assert!(hit.sources.sparse && !hit.sources.dense);
+    }
+
+    #[test]
+    fn every_sync_answer_round_trips() {
+        for account in [
+            SyncAccountAnswer::Unavailable,
+            SyncAccountAnswer::SignedOut,
+            SyncAccountAnswer::SignedIn { email: None },
+            SyncAccountAnswer::SignedIn {
+                email: Some("a@b.example".into()),
+            },
+        ] {
+            round_trip(&account);
+        }
+        for failure in [
+            SyncFailure::SignedOut,
+            SyncFailure::Cancelled,
+            SyncFailure::Network,
+            SyncFailure::Drive("403 quota".into()),
+        ] {
+            round_trip(&SignInStart::Failed(failure.clone()));
+            round_trip(&PullAnswer::Failed(failure.clone()));
+            round_trip(&PushAnswer::Failed(failure.clone()));
+            round_trip(&SignInEvent {
+                attempt: 2,
+                outcome: Err(failure),
+            });
+        }
+        round_trip(&SignInStart::Started {
+            attempt: 1,
+            url: "https://accounts.google.com/o/oauth2/v2/auth?x=1".into(),
+        });
+        round_trip(&PullAnswer::Absent);
+        round_trip(&PullAnswer::File("{}".into()));
+        round_trip(&PushAnswer::Pushed);
+        round_trip(&SignInEvent {
+            attempt: 1,
+            outcome: Ok(Some("a@b.example".into())),
+        });
+    }
+
+    #[test]
+    fn the_push_takes_its_text_by_name() {
+        let push = PushArgs { text: "{}".into() };
+        round_trip(&push);
+        assert_eq!(
+            serde_json::to_value(&push).unwrap(),
+            serde_json::json!({"text": "{}"})
+        );
     }
 }
