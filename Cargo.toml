@@ -20,10 +20,12 @@ serde_json = "1"
 # `ssr` or `hydrate`.
 palicanon-ui-lib = { git = "ssh://git@github.com/PaliCanon/ui-lib.git", tag = "v0.3.0", version = "0.3.0", default-features = false, features = ["csr"] }
 
-# The map (vizualisation 012's fragment), by tag, client side only: `csr` turns on
-# ui-lib's `csr` in it, so the app builds one ui-lib. Its package lives in the
+# The map (vizualisation 012's fragment), by tag. `csr` (client side only: it turns
+# on ui-lib's `csr` in it, so the app builds one ui-lib) is asked by the front's
+# wasm32 dependency only: the tag's browser code is not gated on wasm32, so with
+# `csr` the crate does not build natively (its web-sys is a wasm32 dependency). Its package lives in the
 # repository's `app/` directory; its data files are the repository's `public/`.
-vizualisation = { git = "ssh://git@github.com/PaliCanon/vizualisation.git", tag = "v0.2.0-rc.1", version = "0.1.0", default-features = false, features = ["csr"] }
+vizualisation = { git = "ssh://git@github.com/PaliCanon/vizualisation.git", tag = "v0.2.0-rc.1", version = "0.1.0", default-features = false }
 # The engine's live-view count, for the browser test (same tag, same checkout).
 map-engine = { git = "ssh://git@github.com/PaliCanon/vizualisation.git", tag = "v0.2.0-rc.1", version = "0.1.0" }
 

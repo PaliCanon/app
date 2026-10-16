@@ -3,21 +3,18 @@
 //! in the app (the build task `xtask data` copies the files there). Nothing
 //! comes from the network: the window's CSP allows only `'self'`.
 //!
-//! [`FileSource`] is the shape of vizualisation 012's `MapData` (a file name
-//! in, the bytes or `None` out, a `Send` future); with the map's tag
-//! `BundledData` implements that trait instead and this one goes away.
+//! [`BundledData`] is the app's [`MapData`], the map's own trait (a file name
+//! in, the bytes or `None` out, a `Send` future).
 
 use std::future::Future;
 use std::pin::Pin;
 
 use js_sys::Uint8Array;
 use send_wrapper::SendWrapper;
+use vizualisation::fragment::{MapData, MapFile};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::Response;
-
-/// A boxed future, as the map asks for its files.
-pub type FileFuture = Pin<Box<dyn Future<Output = Option<Vec<u8>>> + Send>>;
 
 /// Where the build task puts the files, under the app's origin.
 const DIRECTORY: &str = "/map-data";
@@ -31,13 +28,6 @@ pub const FILES: [&str; 6] = [
     "blurbs-en.json",
     "blurbs-fr.json",
 ];
-
-/// Where the map reads a file from: the shape of 012's `MapData`.
-pub trait FileSource: Send + Sync + 'static {
-    /// The bytes of the file `name`, or `None` when there is no such file or
-    /// it cannot be read.
-    fn file(&self, name: &'static str) -> FileFuture;
-}
 
 /// Fetches an address: the browser's `fetch`, or a double in a test. Its
 /// future is not `Send` (a browser future never is); [`BundledData`] wraps it.
@@ -75,8 +65,8 @@ impl<F: Fetch> BundledData<F> {
     }
 }
 
-impl<F: Fetch> FileSource for BundledData<F> {
-    fn file(&self, name: &'static str) -> FileFuture {
+impl<F: Fetch> MapData for BundledData<F> {
+    fn file(&self, name: &'static str) -> MapFile {
         let Some(url) = url_for(name) else {
             return Box::pin(std::future::ready(None));
         };
@@ -238,7 +228,7 @@ mod tests {
 
     #[test]
     fn the_data_is_what_the_map_needs_it_to_be() {
-        fn needs<T: FileSource>() {}
+        fn needs<T: MapData>() {}
         fn send<T: Send>(_: &T) {}
         needs::<BundledData>();
         let data = BundledData::<BrowserFetch>::default();

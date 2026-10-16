@@ -497,6 +497,18 @@ mod tests {
         assert_eq!(read_json(&v, None), Err(PinsError::Missing(UI_LIB.into())));
     }
 
+    fn pins_with_map(
+        ui_lib: &std::path::Path,
+        map: &std::path::Path,
+        front: &std::path::Path,
+    ) -> Pins {
+        Pins {
+            ui_lib: ui_lib.to_path_buf(),
+            map: Some(map.to_path_buf()),
+            front: front.to_path_buf(),
+        }
+    }
+
     /// The lockstep test: the real workspace's resolution for the browser
     /// builds one ui-lib, from git, with `csr` and no `ssr` or `hydrate`.
     #[test]
@@ -513,6 +525,13 @@ mod tests {
         // repository's public/ beside its directory, all six.
         let map = pins.map.expect("the front depends on the map crate");
         assert!(map.join("src/fragment.rs").is_file(), "{map:?}");
+        // Tailwind scans the pinned checkout's `app/src` (the crate is the
+        // repository's `app/`).
+        let sources = crate::css::sources(&pins_with_map(&pins.ui_lib, &map, &pins.front));
+        assert!(
+            sources.iter().any(|s| s.ends_with("app/src")),
+            "{sources:?}"
+        );
         for file in crate::data::FILES {
             assert!(crate::data::public_dir(&map).join(file).is_file(), "{file}");
         }

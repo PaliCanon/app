@@ -251,7 +251,10 @@ mod tests {
         let css = input(&pins).unwrap();
         // No automatic source detection: it scans the working directory, which holds
         // this very file and its marker strings (a marker then lands by itself).
-        assert!(css.starts_with("@import \"tailwindcss\" source(none);\n"), "{css}");
+        assert!(
+            css.starts_with("@import \"tailwindcss\" source(none);\n"),
+            "{css}"
+        );
         let theme = root.join("ui-lib/style/theme.css");
         assert!(
             css.contains(&format!("@import \"{}\";", theme.display())),
