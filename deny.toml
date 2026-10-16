@@ -47,6 +47,11 @@ exceptions = [
     { allow = ["MPL-2.0"], crate = "dtoa-short" },
     { allow = ["MPL-2.0"], crate = "option-ext" },
     { allow = ["MPL-2.0"], crate = "selectors" },
+    # Mozilla's root certificates as data (CDLA-Permissive-2.0), a dependency
+    # of rustls-platform-verifier for wasm32 only: the desktop's HTTP client
+    # (reqwest, task 006) never builds for wasm32, but the graph checked here
+    # includes that target for the front.
+    { allow = ["CDLA-Permissive-2.0"], crate = "webpki-root-certs" },
 ]
 confidence-threshold = 0.9
 # The allow list is a policy, not an inventory of the current tree.
