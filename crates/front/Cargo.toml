@@ -16,6 +16,7 @@ path = "src/main.rs"
 leptos = { workspace = true, features = ["csr"] }
 leptos_router.workspace = true
 palicanon-ui-lib.workspace = true
+vizualisation.workspace = true
 console_error_panic_hook = "0.1"
 js-sys = "0.3"
 send_wrapper = { version = "0.6", features = ["futures"] }
@@ -38,6 +39,7 @@ xtask = { path = "../xtask" }
 # The browser test (tests/browser.rs), run by wasm-bindgen-test-runner in a
 # headless Chrome.
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+map-engine.workspace = true
 wasm-bindgen-test = "0.3"
 web-sys = { version = "0.3", features = ["Document", "Element", "HtmlElement", "Location", "Node", "Window"] }
 
