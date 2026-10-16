@@ -2,6 +2,11 @@
 //! window of the webview: the app stays on `tauri://localhost`, an `https:`
 //! or `mailto:` link opens in the system browser, and everything else is
 //! dropped. No new window is ever created.
+//!
+//! The rule is for macOS, where the app is served at `tauri://localhost`.
+//! Windows and Android serve it at `http://tauri.localhost`, which the rule
+//! drops (it is not `tauri:`): those targets come with their own tasks, and
+//! the rule gets that origin then, with its test.
 
 use url::Url;
 

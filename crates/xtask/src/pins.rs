@@ -5,9 +5,15 @@
 //!    source at one revision, with `csr` on and `ssr` and `hydrate` off (two
 //!    revisions would mean the app and a crate it mounts disagree on the
 //!    shell; a path source would mean a sibling checkout);
+//!
 //! 2. the resolved checkout directories of `palicanon-ui-lib` and of the map
 //!    crate, which the CSS and data tasks read files from. Never a sibling
 //!    path: whatever the lockfile resolves.
+//!
+//! The check is over the **wasm32 graph** only (`--filter-platform`): the
+//! native graph is not read, and native dev-dependencies (the front's route
+//! tests turn Leptos' `ssr` on, natively) may legitimately unify `ssr` there.
+//! What the lockstep guarantees is what Trunk builds for the browser.
 
 use std::path::PathBuf;
 
