@@ -62,10 +62,12 @@ allow-wildcard-paths = true
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-# The private ui-lib and vizualisation (the map), by tag, over ssh locally and
+# The private ui-lib, vizualisation (the map) and learn-pali (Learn and its
+# progress format), by tag, over ssh locally and
 # through the CI token's https rewrite (.github/actions/private-deps);
 # Cargo.lock names the ssh form.
 allow-git = [
     "ssh://git@github.com/PaliCanon/ui-lib.git",
     "ssh://git@github.com/PaliCanon/vizualisation.git",
+    "ssh://git@github.com/PaliCanon/learn-pali.git",
 ]

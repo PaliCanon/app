@@ -2558,6 +2558,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 
 [[package]]
+name = "learn_core"
+version = "0.1.0"
+source = "git+ssh://git@github.com/PaliCanon/learn-pali.git?tag=fragment-v0.1.0#a19bfd629777d7f0c7775b5ede9edc89482bba91"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "leptos"
 version = "0.8.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3466,13 +3475,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "palicanon-app-bridge"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "palicanon-app-desktop"
 version = "0.1.0"
 dependencies = [
+ "learn_core",
  "log",
+ "palicanon-app-bridge",
  "palicanon-app-front",
  "palicanon-ui-lib",
  "palicanon_app_identity",
+ "rustix",
  "serde_json",
  "tauri",
  "tauri-build",

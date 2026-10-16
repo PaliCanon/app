@@ -1,6 +1,6 @@
 # Lets cargo (and cargo-deny, which runs `cargo metadata`) fetch the private
-# git dependencies of this workspace over https: ui-lib and vizualisation, the
-# map (Cargo.toml pins each by tag).
+# git dependencies of this workspace over https: ui-lib, vizualisation (the
+# map) and learn-pali (Learn; Cargo.toml pins each by tag).
 #
 # The credential is the GitHub App `palicanon-ci` (Contents: read): the action
 # mints a one-hour token limited to the repositories below, revoked when the
@@ -30,6 +30,7 @@ runs:
         repositories: |
           ui-lib
           vizualisation
+          learn-pali
         permission-contents: read
     - name: Point the ssh git sources at the token
       shell: bash

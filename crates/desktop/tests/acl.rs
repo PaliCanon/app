@@ -82,7 +82,12 @@ fn the_webview_cannot_invoke_a_plugin_command() {
 }
 
 fn app_under_test() -> tauri::App<tauri::test::MockRuntime> {
-    palicanon_app_desktop::configure(mock_builder(), Vec::new())
-        .build(tauri::generate_context!())
-        .expect("the app builds on the mock runtime")
+    let data = std::env::temp_dir().join(format!("pc-acl-{}", std::process::id()));
+    palicanon_app_desktop::configure(
+        mock_builder(),
+        Vec::new(),
+        palicanon_app_desktop::DataDir::At(data),
+    )
+    .build(tauri::generate_context!())
+    .expect("the app builds on the mock runtime")
 }

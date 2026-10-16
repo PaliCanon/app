@@ -12,8 +12,16 @@ publish = false
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+# The progress format's version and parser, from the same learn-pali tag as
+# the front's Learn fragment (a newer file is refused by the same rule).
+learn_core = { git = "ssh://git@github.com/PaliCanon/learn-pali.git", tag = "fragment-v0.1.0", version = "0.1.0" }
 log = "0.4"
+palicanon-app-bridge = { path = "../bridge" }
 palicanon_app_identity = { path = "../identity" }
+# The lock on progress.lock: a safe flock (std's File::try_lock is Rust 1.89,
+# the MSRV is 1.88). Already in the graph through Tauri.
+rustix = { version = "1", features = ["fs"] }
+serde_json.workspace = true
 tauri = { version = "2", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-opener = "2"
@@ -25,6 +33,7 @@ url = "2"
 tauri = { version = "2", features = ["test"] }
 # The navigation rule is run over the front's real links (tests/links.rs).
 palicanon-app-front = { path = "../front" }
+palicanon-app-bridge = { path = "../bridge" }
 palicanon-ui-lib.workspace = true
 serde_json.workspace = true
 

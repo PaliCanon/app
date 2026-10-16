@@ -110,11 +110,43 @@ fn the_webview_has_no_permission() {
     );
 }
 
+/// The names in `generate_handler![...]` in `lib.rs`, without their module.
+fn handler_names() -> Vec<String> {
+    let source = std::fs::read_to_string(manifest_dir().join("src/lib.rs")).unwrap();
+    let start = source
+        .find("generate_handler![")
+        .expect("lib.rs registers its commands")
+        + "generate_handler![".len();
+    let end = start + source[start..].find(']').expect("the list ends");
+    source[start..end]
+        .split(',')
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(|name| name.rsplit("::").next().unwrap().to_string())
+        .collect()
+}
+
+/// The webview's commands are the bridge's, each once, registered in one
+/// place: no other file registers a handler.
 #[test]
-fn no_command_is_exposed() {
-    for file in ["lib.rs", "main.rs", "navigation.rs"] {
+fn the_commands_are_the_bridges_and_registered_once() {
+    let names = handler_names();
+    for name in &names {
+        assert!(
+            palicanon_app_bridge::COMMANDS.contains(&name.as_str()),
+            "{name} is not a bridge command"
+        );
+        assert_eq!(names.iter().filter(|n| *n == name).count(), 1, "{name}");
+    }
+    for file in [
+        "main.rs",
+        "navigation.rs",
+        "writer.rs",
+        "disk.rs",
+        "commands.rs",
+    ] {
         let source = std::fs::read_to_string(manifest_dir().join("src").join(file)).unwrap();
-        for forbidden in ["invoke_handler", "#[tauri::command]", "generate_handler"] {
+        for forbidden in ["invoke_handler", "generate_handler"] {
             assert!(!source.contains(forbidden), "{file} has {forbidden}");
         }
     }

@@ -1,15 +1,24 @@
 //! The PaliCanon desktop app: a Tauri 2 shell around the front. The window
 //! loads the embedded front from `tauri://localhost`; what it may navigate
-//! to is decided in one place, [`navigation`]. The webview is given no
-//! command and no permission: the only thing Rust does for it is open an
-//! `https:` or `mailto:` address in the system browser.
+//! to is decided in one place, [`navigation`]. The webview may call the
+//! app's own commands ([`commands`], the bridge's names) and nothing else:
+//! the progress is kept and written by the native [`writer`], the files and
+//! the search are the shell's; an `https:` or `mailto:` address opens in the
+//! system browser.
 
+pub mod commands;
+pub mod disk;
 pub mod navigation;
 pub mod second_launch;
+pub mod writer;
+
+use std::path::PathBuf;
 
 use tauri::webview::NewWindowResponse;
-use tauri::{AppHandle, Builder, Manager, Runtime, WebviewWindowBuilder};
+use tauri::{AppHandle, Builder, Emitter, Manager, RunEvent, Runtime, WebviewWindowBuilder};
 use tauri_plugin_opener::OpenerExt;
+
+use crate::writer::Writer;
 
 /// The label of the one window (`tauri.conf.json`).
 const MAIN_WINDOW: &str = "main";
@@ -76,16 +85,56 @@ fn focus_main<R: Runtime>(app: &AppHandle<R>) {
     });
 }
 
-/// The app's plugins and its window, on any runtime: what `run` adds to a
-/// builder, and what the tests add to a mock one. The webview is given no
-/// capability, so the plugins' commands (the opener's, the log's) are not
-/// callable from it; `tests/acl.rs` holds that to account.
+/// Where the progress lives: the app data directory of the app's identifier,
+/// or a given directory (a test's temp dir: a test never touches the
+/// user's progress).
+#[derive(Debug, Clone)]
+pub enum DataDir {
+    /// `<app data dir of app.palicanon.learn>`.
+    App,
+    /// This directory.
+    At(PathBuf),
+}
+
+/// The progress writer over `dir`, its verdicts emitted to the webview as
+/// the bridge's status event; an emit that fails (the webview gone) is
+/// logged, nothing else.
+fn progress_writer<R: Runtime>(app: &AppHandle<R>, dir: PathBuf) -> Writer {
+    let emitter = app.clone();
+    Writer::new(
+        dir,
+        disk::RealDisk,
+        Box::new(move |event| {
+            if let Err(error) = emitter.emit(palicanon_app_bridge::PROGRESS_STATUS_EVENT, event) {
+                log::warn!("progress: the status event was not delivered: {error}");
+            }
+        }),
+        writer::RETRY,
+    )
+}
+
+/// What the app does on `RunEvent::Exit` (Cmd-Q, the last window closed):
+/// the progress writer's exit write.
+pub fn on_run_event<R: Runtime>(app: &AppHandle<R>, event: &RunEvent) {
+    if let RunEvent::Exit = event
+        && let Some(writer) = app.try_state::<Writer>()
+    {
+        writer.exit();
+    }
+}
+
+/// The app's plugins, its commands, its progress writer and its window, on
+/// any runtime: what `run` adds to a builder, and what the tests add to a
+/// mock one. The webview may call the app's commands only, never a
+/// plugin's; `tests/acl.rs` holds that to account.
 ///
 /// `log_targets` is where the app's log goes: [`default_log_targets`] in the
 /// app, none in a test (a test must not write into the user's log).
+/// `data` is where the progress lives.
 pub fn configure<R: Runtime>(
     builder: Builder<R>,
     log_targets: Vec<tauri_plugin_log::Target>,
+    data: DataDir,
 ) -> Builder<R> {
     builder
         .plugin(
@@ -96,7 +145,18 @@ pub fn configure<R: Runtime>(
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
-        .setup(|app| {
+        .invoke_handler(tauri::generate_handler![
+            commands::progress_load,
+            commands::progress_save,
+        ])
+        .setup(move |app| {
+            let dir = match data {
+                DataDir::App => app.path().app_data_dir()?,
+                DataDir::At(dir) => dir,
+            };
+            let writer = progress_writer(app.handle(), dir);
+            writer.spawn();
+            app.manage(writer);
             create_window(app.handle())?;
             Ok(())
         })
@@ -117,12 +177,15 @@ pub fn default_log_targets() -> Vec<tauri_plugin_log::Target> {
 /// # Panics
 /// When Tauri cannot start (a missing window configuration, no display).
 pub fn run() {
-    configure(Builder::default(), default_log_targets())
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+    // The single-instance plugin first, as its documentation asks.
+    let builder =
+        Builder::default().plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             focus_main(app);
-        }))
-        .run(tauri::generate_context!())
-        .expect("run the PaliCanon window");
+        }));
+    configure(builder, default_log_targets(), DataDir::App)
+        .build(tauri::generate_context!())
+        .expect("build the PaliCanon app")
+        .run(|app, event| on_run_event(app, &event));
 }
 
 #[cfg(test)]
