@@ -39,28 +39,82 @@ fn is_app(url: &Url) -> bool {
         && url.password().is_none()
 }
 
-/// Applies [`decide`] for a navigation: `open` is called with the address
-/// when it goes to the system browser. Returns whether the webview may
-/// navigate itself.
-pub fn allow_navigation(url: &Url, open: impl FnOnce(&str)) -> bool {
+/// What happened to a navigation or a request for a new window. `decide`
+/// stays pure; this is the outcome once the system browser was asked, so a
+/// refusal from the system is told apart from a designed drop.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Outcome {
+    /// The webview may go there (the app's own page).
+    Stayed,
+    /// Handed to the system browser, which accepted it.
+    Opened,
+    /// Handed to the system browser, which refused it (the reason).
+    OpenRefused(String),
+    /// Designed to be dropped: not an address the app follows, or a new
+    /// window (never created).
+    Dropped,
+}
+
+/// Applies [`decide`] to a navigation: `open` is called with the address
+/// when it goes to the system browser and says whether the system took it.
+pub fn handle(url: &Url, open: impl FnOnce(&str) -> Result<(), String>) -> Outcome {
     match decide(url) {
-        Navigation::Stay => true,
-        Navigation::OpenOutside => {
-            open(url.as_str());
-            false
-        }
-        Navigation::Drop => false,
+        Navigation::Stay => Outcome::Stayed,
+        Navigation::OpenOutside => match open(url.as_str()) {
+            Ok(()) => Outcome::Opened,
+            Err(why) => Outcome::OpenRefused(why),
+        },
+        Navigation::Drop => Outcome::Dropped,
     }
 }
 
-/// Applies [`decide`] for a request to open a new window: the window is
-/// never created (`false` always); an address bound for the system browser
-/// is opened through `open`.
-pub fn allow_new_window(url: &Url, open: impl FnOnce(&str)) -> bool {
-    if decide(url) == Navigation::OpenOutside {
-        open(url.as_str());
+/// Applies [`decide`] to a request for a new window: the window is never
+/// created, so the app's own address is dropped too.
+pub fn handle_new_window(url: &Url, open: impl FnOnce(&str) -> Result<(), String>) -> Outcome {
+    match handle(url, open) {
+        Outcome::Stayed => Outcome::Dropped,
+        other => other,
     }
+}
+
+/// The log line for an outcome: a level and a message, distinct for a
+/// designed drop (a warning) and for a refusal by the system (an error).
+pub fn record(url: &Url, outcome: &Outcome) -> (log::Level, String) {
+    match outcome {
+        Outcome::Stayed => (log::Level::Debug, format!("navigation stays: {url}")),
+        Outcome::Opened => (
+            log::Level::Info,
+            format!("opened in the system browser: {url}"),
+        ),
+        Outcome::OpenRefused(why) => (
+            log::Level::Error,
+            format!("the system refused to open {url}: {why}"),
+        ),
+        Outcome::Dropped => (
+            log::Level::Warn,
+            format!("dropped by the navigation rule: {url}"),
+        ),
+    }
+}
+
+/// Handles a navigation, logs its outcome, and returns whether the webview
+/// may navigate itself.
+pub fn allow_navigation(url: &Url, open: impl FnOnce(&str) -> Result<(), String>) -> bool {
+    let outcome = handle(url, open);
+    log_outcome(url, &outcome);
+    outcome == Outcome::Stayed
+}
+
+/// Handles a request for a new window, logs its outcome, and returns
+/// `false`: a window is never created.
+pub fn allow_new_window(url: &Url, open: impl FnOnce(&str) -> Result<(), String>) -> bool {
+    log_outcome(url, &handle_new_window(url, open));
     false
+}
+
+fn log_outcome(url: &Url, outcome: &Outcome) {
+    let (level, message) = record(url, outcome);
+    log::log!(level, "{message}");
 }
 
 #[cfg(test)]
@@ -122,20 +176,95 @@ mod tests {
     fn a_navigation_opens_outside_once_and_does_not_navigate() {
         let url = Url::parse("https://suttacentral.net/dn1").unwrap();
         let mut opened = Vec::new();
-        assert!(!allow_navigation(&url, |u| opened.push(u.to_string())));
+        assert!(!allow_navigation(&url, |u| {
+            opened.push(u.to_string());
+            Ok(())
+        }));
         assert_eq!(opened, ["https://suttacentral.net/dn1"]);
     }
 
     #[test]
     fn the_app_navigation_opens_nothing() {
         let url = Url::parse("tauri://localhost/map").unwrap();
-        assert!(allow_navigation(&url, |u| panic!("opened {u}")));
+        assert!(allow_navigation(&url, |u| -> Result<(), String> {
+            panic!("opened {u}")
+        }));
     }
 
     #[test]
     fn a_dropped_navigation_opens_nothing_and_does_not_navigate() {
         let url = Url::parse("javascript:alert(1)").unwrap();
-        assert!(!allow_navigation(&url, |u| panic!("opened {u}")));
+        assert!(!allow_navigation(&url, |u| -> Result<(), String> {
+            panic!("opened {u}")
+        }));
+    }
+
+    /// The system browser takes any address (a double with the `open` shape).
+    #[allow(clippy::unnecessary_wraps)]
+    fn accepted(_: &str) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn refused(_: &str) -> Result<(), String> {
+        Err("no handler".to_string())
+    }
+
+    #[test]
+    fn the_outcome_maps_each_decision() {
+        let url = |a: &str| Url::parse(a).unwrap();
+        assert_eq!(
+            handle(&url("tauri://localhost/map"), accepted),
+            Outcome::Stayed
+        );
+        assert_eq!(
+            handle(&url("https://suttacentral.net/"), accepted),
+            Outcome::Opened
+        );
+        assert_eq!(
+            handle(&url("https://suttacentral.net/"), refused),
+            Outcome::OpenRefused("no handler".to_string())
+        );
+        assert_eq!(
+            handle(&url("javascript:alert(1)"), refused),
+            Outcome::Dropped
+        );
+        // A refusal is not a drop, and a drop never asks the system.
+        assert_ne!(
+            handle(&url("https://a.example/"), refused),
+            handle(&url("http://a.example/"), refused)
+        );
+    }
+
+    #[test]
+    fn a_new_window_for_the_apps_own_address_is_dropped() {
+        let url = Url::parse("tauri://localhost/map").unwrap();
+        assert_eq!(handle_new_window(&url, accepted), Outcome::Dropped);
+        let url = Url::parse("https://a.example/").unwrap();
+        assert_eq!(
+            handle_new_window(&url, refused),
+            Outcome::OpenRefused("no handler".into())
+        );
+    }
+
+    #[test]
+    fn a_refusal_is_logged_apart_from_a_designed_drop() {
+        let url = Url::parse("https://a.example/").unwrap();
+        let (drop_level, drop_text) = record(&url, &Outcome::Dropped);
+        let (refused_level, refused_text) =
+            record(&url, &Outcome::OpenRefused("no handler".into()));
+        assert_eq!(drop_level, log::Level::Warn);
+        assert_eq!(refused_level, log::Level::Error);
+        assert!(
+            drop_text.contains("dropped by the navigation rule"),
+            "{drop_text}"
+        );
+        assert!(
+            refused_text.contains("refused") && refused_text.contains("no handler"),
+            "{refused_text}"
+        );
+        assert_ne!(drop_text, refused_text);
+        assert_eq!(record(&url, &Outcome::Opened).0, log::Level::Info);
+        assert_eq!(record(&url, &Outcome::Stayed).0, log::Level::Debug);
     }
 
     #[test]
@@ -149,7 +278,10 @@ mod tests {
         ] {
             let mut opened = 0;
             assert!(
-                !allow_new_window(&Url::parse(a).unwrap(), |_| opened += 1),
+                !allow_new_window(&Url::parse(a).unwrap(), |_| {
+                    opened += 1;
+                    Ok(())
+                }),
                 "{a}"
             );
             assert_eq!(opened, opens, "{a}");

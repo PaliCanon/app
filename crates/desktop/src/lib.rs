@@ -13,11 +13,12 @@ use tauri_plugin_opener::OpenerExt;
 /// The label of the one window (`tauri.conf.json`).
 const MAIN_WINDOW: &str = "main";
 
-/// Opens `address` in the system browser, from Rust only.
-fn open_outside(app: &AppHandle, address: &str) {
-    if let Err(error) = app.opener().open_url(address, None::<&str>) {
-        eprintln!("palicanon: cannot open {address}: {error}");
-    }
+/// Opens `address` in the system browser, from Rust only; the system's
+/// refusal comes back as the reason (the navigation rule logs it).
+fn open_outside(app: &AppHandle, address: &str) -> Result<(), String> {
+    app.opener()
+        .open_url(address, None::<&str>)
+        .map_err(|error| error.to_string())
 }
 
 /// Builds the one window from the configuration, with the navigation rule
@@ -62,6 +63,11 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             focus_main(app);
         }))
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Info)
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             create_window(app.handle())?;
