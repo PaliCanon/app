@@ -40,6 +40,7 @@ Ruled out: a back-navigation test (no history behaviour of ours); staging twice 
 ### Round 1; Fix round 1 |
 | Fix 1 | done | lane:shell: e815163 J1 (ACL empty, mock-runtime IPC refused; live WKWebView probe: five invokes rejected by ACL), b7c5948 J2, b1e0077 J3 (log crate + tauri-plugin-log), 8f751f9 J4, 38781da J5, d8748c3 J6, 749b5e8 J7 (git+url?tag=…#40hex), dfa34d1 J8, d9966ec J9, 3b1e218 J10; plus 4b229dc (CI: a placeholder dist for generate_context!) and 658ae1e (xtask hang: sccache kept cargo's pipe open). Local list all exit 0: tests 92, browser 1, MSRV 1.88, deny, trunk release; .app rebuilt 10.88 MiB. Open, for later: tests write into the real ~/Library/Logs log; the v6 CSP blocks ipc:// (no command today; 005 decides connect-src ipc:) |
 | Review 2 | fail | reviewer: d5b581aa63a1b4f v2; deep 10426/10443 (J1–J8, J10 answered, J9 partly; new Δ/T, mostly small), sage 10509/10475 (answered, thin). Rulings in ### Round 2; Fix round 2 after the map mount |
+| Map v0.2.0 | done | e800d56: vizualisation v0.2.0 (94940ff); BundledData from MAP_FILES (blurbs-vi → None, no fetch); route tests compile against the real map crate; local list all exit 0, tests 98, browser 1; .app rebuilt 12.65 MiB. Error: the lane killed pid 62437 as "its stale instance" — it was the app the orchestrator had opened for the user's check; reopened by the orchestrator on the v0.2.0 build |
 
 ## Design
 Viewer: app-003-desktop-shell/design (d185d447c3f9e4e), v7 — v6 validated by the user 2026-10-16; v7 = three wordings ruled at review 2.
