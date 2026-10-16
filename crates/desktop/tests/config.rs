@@ -16,7 +16,8 @@ fn config() -> Value {
     serde_json::from_str(&text).expect("tauri.conf.json is JSON")
 }
 
-fn csp() -> Vec<(String, Vec<String>)> {
+/// The CSP as `directive -> sources`.
+fn csp() -> std::collections::BTreeMap<String, Vec<String>> {
     let config = config();
     let csp = config["app"]["security"]["csp"]
         .as_str()
@@ -29,14 +30,6 @@ fn csp() -> Vec<(String, Vec<String>)> {
             (parts.next().unwrap(), parts.collect())
         })
         .collect()
-}
-
-fn directive(name: &str) -> Vec<String> {
-    csp()
-        .into_iter()
-        .find(|(n, _)| n == name)
-        .unwrap_or_else(|| panic!("no {name} directive"))
-        .1
 }
 
 #[test]
@@ -78,25 +71,26 @@ fn the_front_is_embedded_from_the_trunk_dist() {
     assert!(before.starts_with("trunk build --release"), "{before}");
 }
 
+/// An allowlist: exactly these five directives with exactly these sources.
+/// A sixth directive, or one more source in any of them, fails.
 #[test]
-fn the_csp_allows_only_the_app_itself() {
-    assert_eq!(directive("default-src"), ["'self'"]);
-    assert_eq!(directive("script-src"), ["'self'", "'wasm-unsafe-eval'"]);
-    assert_eq!(directive("style-src"), ["'self'", "'unsafe-inline'"]);
-    assert_eq!(directive("connect-src"), ["'self'"]);
-    assert_eq!(directive("img-src"), ["'self'", "data:"]);
-}
-
-#[test]
-fn the_csp_names_no_remote_origin_and_no_eval() {
-    for (name, sources) in csp() {
-        for source in sources {
-            assert!(
-                !source.contains("://") && source != "*" && source != "'unsafe-eval'",
-                "{name} {source}"
-            );
-        }
-    }
+fn the_csp_is_exactly_the_designs_five_directives() {
+    let expected: std::collections::BTreeMap<String, Vec<String>> = [
+        ("default-src", vec!["'self'"]),
+        ("script-src", vec!["'self'", "'wasm-unsafe-eval'"]),
+        ("style-src", vec!["'self'", "'unsafe-inline'"]),
+        ("connect-src", vec!["'self'"]),
+        ("img-src", vec!["'self'", "data:"]),
+    ]
+    .into_iter()
+    .map(|(name, sources)| {
+        (
+            name.to_string(),
+            sources.into_iter().map(str::to_string).collect(),
+        )
+    })
+    .collect();
+    assert_eq!(csp(), expected);
 }
 
 #[test]
