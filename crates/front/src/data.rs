@@ -43,13 +43,14 @@ pub fn url_for(name: &str) -> Option<String> {
 }
 
 /// Whether a response is a data file: a 200 with a content type that is
-/// present and is not the HTML page (a missing content type is not data).
+/// present, not empty and not the HTML page (a missing or empty content type
+/// is not data).
 /// Tauri answers an address it has no file for with `index.html` and a 200
 /// (seen in the app: a missing `/map-data/…` came back as `text/html`), and
 /// none of the six files is HTML.
 pub fn is_data(status: u16, content_type: Option<&str>) -> bool {
     let is_html = |t: &str| t.trim_start().to_ascii_lowercase().starts_with("text/html");
-    status == 200 && content_type.is_some_and(|t| !is_html(t))
+    status == 200 && content_type.is_some_and(|t| !t.trim().is_empty() && !is_html(t))
 }
 
 /// The map's data, read from the files bundled in the app.
@@ -193,6 +194,8 @@ mod tests {
             (200, Some("application/json"), true),
             (200, Some("application/octet-stream"), true),
             (200, None, false),
+            (200, Some(""), false),
+            (200, Some("   "), false),
             (200, Some("text/html"), false),
             (200, Some("Text/HTML; charset=utf-8"), false),
             (404, Some("application/json"), false),
