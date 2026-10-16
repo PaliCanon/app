@@ -1,0 +1,14 @@
+# The desktop crate embeds the front's dist at compile time
+# (tauri.conf.json's frontendDist, read by tauri::generate_context!), so every
+# job that compiles it needs the directory to exist. Lint, test and doc jobs
+# need a directory, not the real front: this writes a placeholder page. The
+# bundle job builds the real dist with Trunk and does not use this.
+name: Placeholder dist
+description: Create target/dist with a placeholder index.html so the desktop crate compiles.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        mkdir -p target/dist
+        [ -f target/dist/index.html ] || printf '<!doctype html><title>PaliCanon</title>\n' > target/dist/index.html

@@ -8,6 +8,9 @@
 # for wasm32 only by `clippy-front` and `front-build`; the native jobs also
 # compile it (its route tests render on the server side of Leptos).
 #
+# The jobs that compile the desktop crate also write a placeholder dist
+# (`placeholder-dist`): Tauri embeds frontendDist at compile time.
+#
 # Every job that runs cargo uses the composite action `private-deps`: ui-lib
 # is a private git dependency (a tag), fetched with a one-hour GitHub App
 # token (secrets APP_ID and APP_PRIVATE_KEY), never an ssh key. cargo-deny is
@@ -50,6 +53,7 @@ jobs:
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: ./.github/actions/placeholder-dist
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -105,6 +109,7 @@ jobs:
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: ./.github/actions/placeholder-dist
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --locked
 
@@ -119,6 +124,7 @@ jobs:
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: ./.github/actions/placeholder-dist
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo doc --locked --no-deps
 
@@ -131,6 +137,7 @@ jobs:
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: ./.github/actions/placeholder-dist
       - uses: dtolnay/rust-toolchain@1.88
       # --locked: the committed Cargo.lock is what the MSRV claim is verified
       # against; a fresh resolution could pull a dependency with a higher MSRV.
@@ -215,6 +222,7 @@ jobs:
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: ./.github/actions/placeholder-dist
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
