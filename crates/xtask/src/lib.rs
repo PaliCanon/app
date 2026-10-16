@@ -1,7 +1,9 @@
 //! The app's build tasks, native and never shipped: `pins` reads the one
 //! `cargo metadata` of the browser build for the lockstep check and the
 //! checkout paths; `css` builds the Tailwind CSS, `data` stages the map's
-//! data files and `assets` the fragments' root files, all from those paths.
+//! data files and `assets` the fragments' root files, all from those paths;
+//! `yuga` fetches, checks and stages the local search's sidecar, store and
+//! model for the bundle.
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -10,6 +12,7 @@ pub mod assets;
 pub mod css;
 pub mod data;
 pub mod pins;
+pub mod yuga;
 
 /// Runs the task `task` over `pins` and returns the line it reports.
 /// `tailwind` finds the Tailwind CLI, only asked by `css`. `root` is the
@@ -48,7 +51,30 @@ pub fn run(
             let n = assets::stage(pins.learn.as_deref(), pins.search.as_deref(), &out)?;
             Ok(format!("xtask assets: {n} files in {}", out.display()))
         }
-        other => Err(format!("unknown task {other:?} (pins, css, data, assets)").into()),
+        "yuga" => {
+            let out = root.join("target/yuga");
+            let cache = std::env::var_os("XTASK_YUGA_CACHE").map(PathBuf::from);
+            let model = yuga::model_files();
+            let model: Vec<(&str, yuga::Source<'_>, &str)> = model
+                .iter()
+                .map(|(name, url, sha)| (*name, yuga::Source::Https(url.as_str()), *sha))
+                .collect();
+            let staged = yuga::stage(
+                &out,
+                cache.as_deref(),
+                yuga::SIDECAR,
+                yuga::STORE,
+                &model,
+                &yuga::Tools,
+            )?;
+            Ok(format!(
+                "xtask yuga: {}, {}, {}",
+                staged.binary.display(),
+                staged.store.display(),
+                staged.model.display()
+            ))
+        }
+        other => Err(format!("unknown task {other:?} (pins, css, data, assets, yuga)").into()),
     }
 }
 

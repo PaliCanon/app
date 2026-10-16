@@ -151,3 +151,38 @@ fn the_commands_are_the_bridges_and_registered_once() {
         }
     }
 }
+
+/// The bundle's own configuration (merged by `cargo tauri build --config
+/// tauri.bundle.conf.json`): the sidecar as Tauri's `externalBin` (Tauri adds
+/// the target triple to the name, `xtask yuga` stages it so) and the store,
+/// the model and the sidecar's licence as read-only resources, all staged by
+/// `xtask yuga`, which runs before the front's build. Kept apart from
+/// `tauri.conf.json` so `cargo build` and `cargo test` need none of the
+/// 650 MB.
+#[test]
+fn the_bundle_carries_the_sidecar_the_store_and_the_model() {
+    let text = std::fs::read_to_string(manifest_dir().join("tauri.bundle.conf.json"))
+        .expect("tauri.bundle.conf.json is in the crate");
+    let bundle: Value = serde_json::from_str(&text).expect("JSON");
+    assert_eq!(
+        bundle["bundle"]["externalBin"],
+        serde_json::json!(["../../target/yuga/bin/yuga-sidecar"])
+    );
+    assert_eq!(
+        bundle["bundle"]["resources"],
+        serde_json::json!({
+            "../../target/yuga/store/": "yuga/store/",
+            "../../target/yuga/model/": "yuga/model/",
+            "../../target/yuga/licence/": "yuga/licence/",
+        })
+    );
+    let before = bundle["build"]["beforeBuildCommand"]["script"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(
+        before.starts_with("cargo xtask yuga && trunk build --release"),
+        "{before}"
+    );
+    assert!(config()["bundle"].get("externalBin").is_none());
+    assert!(config()["bundle"].get("resources").is_none());
+}

@@ -23,7 +23,7 @@ it). Private until opened (the repository is for open source later).
 | `crates/bridge` | The wire between the front and the shell, serde only, built native and wasm: the six commands' names, their answers, the `progress-status` event, the 4 MiB cap. |
 | `crates/front` | The client-side Leptos front (`csr`) on ui-lib: the progress loaded first (`progress_load`), then Learn's progress context above one router in the shell, the routes, the bundled map data. Built to wasm by Trunk. One file per mounted fragment: `src/learn_mount.rs` (learn-pali `fragment-v0.1.0` under `/learn`; the store `src/progress.rs` mirrors the native writer, `src/files.rs` the native export and import), `src/map_mount.rs` (vizualisation `v0.2.0` under `/map`). `src/tauri.rs` is the webview's side of the bridge. |
 | `crates/desktop` | The Tauri 2 shell: the window, the CSP, the one navigation rule (`tauri://localhost` stays, `https:` and `mailto:` open in the system browser, everything else is dropped), single instance. The progress writer (`src/writer.rs`: one mutex, one slot, `progress.json` in the app data directory, `progress.lock` held for the session, the exit write on `RunEvent::Exit`) and the commands the webview may call (`src/commands.rs`). |
-| `crates/xtask` | Native build tasks, never shipped: `cargo xtask pins` (ui-lib is built once, from git, with `csr` and without `ssr` or `hydrate`; `learn_core` and `learn_pali` come from one revision; the checkout paths), `css` (Tailwind, over ui-lib's, the fragments' and the front's sources), `data` (the map data files), `assets` (`/lotus.png` from Learn's checkout). |
+| `crates/xtask` | Native build tasks, never shipped: `cargo xtask pins` (ui-lib is built once, from git, with `csr` and without `ssr` or `hydrate`; `learn_core` and `learn_pali` come from one revision; the checkout paths), `css` (Tailwind, over ui-lib's, the fragments' and the front's sources), `data` (the map data files), `assets` (`/lotus.png` from Learn's checkout), `yuga` (the sidecar, the store and the model, checked and staged in `target/yuga` for the bundle). |
 
 ## Build and open the app
 
@@ -31,11 +31,17 @@ it). Private until opened (the repository is for open source later).
 export RUSTUP_HOME=$HOME/.rustup-pc/rustup CARGO_HOME=$HOME/.rustup-pc/cargo PATH=$HOME/.rustup-pc/cargo/bin:$PATH RUSTC_WRAPPER=sccache
 cargo install trunk tauri-cli --locked          # once
 cd crates/desktop
-cargo tauri build --bundles app                 # runs the Trunk build of the front first
+cargo tauri build --bundles app --config tauri.bundle.conf.json
+# runs `cargo xtask yuga` (the sidecar, the store, the model: fetched and
+# checked against their SHA-256) and the Trunk build of the front first
 open ../../target/release/bundle/macos/PaliCanon.app
 ```
 
-The Tailwind CLI is `$TAILWIND`, else the one `cargo-leptos` cached. The app
+The Tailwind CLI is `$TAILWIND`, else the one `cargo-leptos` cached. `xtask
+yuga` downloads yuga-sidecar (public release), the model (Hugging Face) and the
+English store (`gsutil`, the builder's Google credentials); `XTASK_YUGA_CACHE`
+names a directory that may already hold them, used when their digest is the
+pinned one. The app
 is unsigned (signing is task T7): macOS asks to confirm the first opening.
 ui-lib is a private git dependency by tag (`ssh://git@github.com/PaliCanon/ui-lib.git`):
 cargo needs the ssh key of an account that reads it.
