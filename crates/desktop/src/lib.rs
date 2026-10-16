@@ -80,11 +80,19 @@ fn focus_main<R: Runtime>(app: &AppHandle<R>) {
 /// builder, and what the tests add to a mock one. The webview is given no
 /// capability, so the plugins' commands (the opener's, the log's) are not
 /// callable from it; `tests/acl.rs` holds that to account.
-pub fn configure<R: Runtime>(builder: Builder<R>) -> Builder<R> {
+///
+/// `log_targets` is where the app's log goes: [`default_log_targets`] in the
+/// app, none in a test (a test must not write into the user's log).
+pub fn configure<R: Runtime>(
+    builder: Builder<R>,
+    log_targets: Vec<tauri_plugin_log::Target>,
+) -> Builder<R> {
     builder
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Info)
+                .clear_targets()
+                .targets(log_targets)
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
@@ -94,12 +102,22 @@ pub fn configure<R: Runtime>(builder: Builder<R>) -> Builder<R> {
         })
 }
 
+/// Where the app's log goes: the terminal it was started from, and the log
+/// directory of the app's identifier (`~/Library/Logs/app.palicanon.learn/`).
+pub fn default_log_targets() -> Vec<tauri_plugin_log::Target> {
+    use tauri_plugin_log::{Target, TargetKind};
+    vec![
+        Target::new(TargetKind::Stdout),
+        Target::new(TargetKind::LogDir { file_name: None }),
+    ]
+}
+
 /// Runs the app.
 ///
 /// # Panics
 /// When Tauri cannot start (a missing window configuration, no display).
 pub fn run() {
-    configure(Builder::default())
+    configure(Builder::default(), default_log_targets())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             focus_main(app);
         }))

@@ -42,9 +42,16 @@ fn the_generated_capabilities_grant_nothing() {
 
 #[test]
 fn the_webview_cannot_invoke_a_plugin_command() {
-    let app = app_under_test();
-    // `setup` runs when the app runs; the window it builds is built here.
-    palicanon_app_desktop::create_window(app.handle()).expect("the window");
+    let mut app = app_under_test();
+    // `setup` runs with the app's first iteration and builds the window.
+    #[allow(
+        deprecated,
+        reason = "one iteration is the point: run_return would not return"
+    )]
+    app.run_iteration(|_, _| {});
+    let windows = app.webview_windows();
+    assert_eq!(windows.len(), 1, "exactly one window: {:?}", windows.keys());
+    assert!(windows.contains_key("main"));
     let webview = app.get_webview_window("main").expect("the main window");
     for (cmd, body) in [
         (
@@ -75,7 +82,7 @@ fn the_webview_cannot_invoke_a_plugin_command() {
 }
 
 fn app_under_test() -> tauri::App<tauri::test::MockRuntime> {
-    palicanon_app_desktop::configure(mock_builder())
+    palicanon_app_desktop::configure(mock_builder(), Vec::new())
         .build(tauri::generate_context!())
         .expect("the app builds on the mock runtime")
 }
