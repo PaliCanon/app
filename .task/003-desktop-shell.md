@@ -1,6 +1,6 @@
 # 003 The desktop shell with the Map first
 
-status: building · rank: 7 · level: hard · type: feature · request: app-001-palicanon-app T5a (user, 2026-10-16: "build l'app que je puisse checker"; "Oui, construis 048 + 021") · session: app-003-desktop-shell · after: [vizualisation 012 (its first tag)]
+status: review · rank: 7 · level: hard · type: feature · request: app-001-palicanon-app T5a (user, 2026-10-16: "build l'app que je puisse checker"; "Oui, construis 048 + 021") · session: app-003-desktop-shell · after: [vizualisation 012 (its first tag)]
 
 ## Summary
 Rank (rank.md): difficulty 7 (a new Tauri app around two fragments from two repositories, a persistent store with a write queue and failure states, native commands with atomic writes), impact 7 (the first build of the PaliCanon app the user checks and later ships) → 7.
@@ -10,7 +10,7 @@ Requirements from the user's checks of the preview (2026-10-16): one rail, no do
 ## Workflow
 ```mermaid
 flowchart LR
-  Define["Define ✓ v6 validated"]:::done --> Plan["Plan ✓ one lane"]:::done --> Build:::doing --> Verify:::todo --> Review:::todo --> Check:::todo --> Merge:::todo --> Retro:::todo
+  Define["Define ✓ v6 validated"]:::done --> Plan["Plan ✓ one lane"]:::done --> Build["Build ✓ 12 commits"]:::done --> Verify["Verify ✓ 60 tests"]:::done --> Review:::doing --> Check:::todo --> Merge:::todo --> Retro:::todo
   classDef doing fill:#f9a825,color:#000
   classDef done fill:#2e7d32,color:#fff
   classDef todo fill:#9e9e9e,color:#fff
@@ -24,6 +24,8 @@ flowchart LR
 | Scope | changed | user, 2026-10-16: «commence par intégrer la carte» — v5: the shell mounts the Map first (vizualisation 012's contract, relayed 2026-10-16); Learn, Search and the progress writer (v4) move to 005; the user checks the Map at this task's end |
 | Define (user) | done | 2026-10-16: «Sinon commence le draft», «macOS 13 minimum n'est pas un souci», «Ajoute la carte» (005's routes gain /map) — v6 validated |
 | Plan | done | orchestrator: one Sonnet lane (new workspace, files new and coupled); the /map route mounts a stub until vizualisation 012's first tag, then the tag in one commit; builds under nice, -j 4 |
+| Build | done | lane:shell (Sonnet): 4007c8a … b976001 (12 commits). .app at target/release/bundle/macos/PaliCanon.app (10.59 MiB, arm64, macOS 13+), /map a stub behind crates/front/src/map_mount.rs. Checks exit 0: fmt, leptosfmt, clippy native + front wasm32, tests 60 (desktop 7 + config 9, front 16, identity 5, xtask 23), doc, MSRV 1.88 check, deny, browser 1, trunk release (445 KB wasm). Opened: starts, single instance works; a probe build in the real WKWebView: / → /map, no CSP violation, window.open http/file null, location to http dropped. Found and fixed: Tauri answers a missing file with index.html 200 (BundledData refuses text/html) |
+| Rulings | done | orchestrator: all accepted — xtask data staged in target/map-data then Trunk copy-dir; deny.toml (macOS + wasm32 graph, seven advisories ignored with reasons via tauri-utils and leptos, MPL-2.0 allowed per crate for cssparser, cssparser-macros, dtoa-short, option-ext, selectors: file-level copyleft, unmodified); CI written for macOS runners (not run: Actions blocked); the map crate layout <dir>/src and <dir>/public (confirmed by vizualisation's message); the spike's icons; the window built in Rust (create: false) for the navigation hooks; a small strings table; ui-lib version field for deny; the cargo xtask alias; the executable name palicanon-app-desktop |
 
 ## Design
 Viewer: app-003-desktop-shell/design (d185d447c3f9e4e), v6 — validated by the user 2026-10-16 («Sinon commence le draft»; «macOS 13 minimum n'est pas un souci»; «Ajoute la carte» for 005's routes). v4 (Learn and Search, with /map added) is kept for task 005.
