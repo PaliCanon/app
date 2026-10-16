@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PaliCanon</title>
+    <link data-trunk rel="icon" href="public/favicon.ico" />
+    <!-- Built by `cargo xtask css` (Trunk's pre_build hook, Trunk.toml). -->
+    <link data-trunk rel="css" href="../../target/css/app.css" />
+    <link data-trunk rel="copy-file" href="public/lotus.png" />
+    <!-- The map's data, staged by `cargo xtask data`: /map-data/<name>. -->
+    <link data-trunk rel="copy-dir" href="../../target/map-data" />
+    <link data-trunk rel="rust" href="Cargo.toml" data-bin="palicanon-app-csr" data-wasm-opt="z" />
+  </head>
+  <body></body>
+</html>

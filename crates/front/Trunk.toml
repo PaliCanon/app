@@ -1,0 +1,18 @@
+# The front's browser build, for the desktop shell to embed. From
+# crates/front:  trunk build --release --cargo-profile wasm-release
+# The two pre_build hooks build what the page links: the Tailwind CSS and the
+# staged map data (both read the pins, see crates/xtask).
+[build]
+target = "index.html"
+dist = "../../target/dist"
+public_url = "/"
+
+[[hooks]]
+stage = "pre_build"
+command = "cargo"
+command_arguments = ["xtask", "css"]
+
+[[hooks]]
+stage = "pre_build"
+command = "cargo"
+command_arguments = ["xtask", "data"]
