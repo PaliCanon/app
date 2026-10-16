@@ -6,6 +6,10 @@ use palicanon_ui_lib::Language;
 /// The app's strings in one language.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Strings {
+    /// The rail entry of Learn.
+    pub nav_learn: &'static str,
+    /// The rail entry of Search.
+    pub nav_search: &'static str,
     /// The rail entry of the map.
     pub nav_map: &'static str,
     /// The page of an address the app does not know.
@@ -24,6 +28,8 @@ pub struct Strings {
 pub fn of(language: Language) -> Strings {
     match language {
         Language::En => Strings {
+            nav_learn: "Learn",
+            nav_search: "Search",
             nav_map: "Map",
             not_found: "Not found",
             footer_acknowledgements: "Acknowledgements",
@@ -32,6 +38,8 @@ pub fn of(language: Language) -> Strings {
             footer_support: "Support",
         },
         Language::Fr => Strings {
+            nav_learn: "Apprendre",
+            nav_search: "Recherche",
             nav_map: "Carte",
             not_found: "Introuvable",
             footer_acknowledgements: "Crédits",
@@ -40,6 +48,8 @@ pub fn of(language: Language) -> Strings {
             footer_support: "Soutenir",
         },
         Language::Vi => Strings {
+            nav_learn: "Học",
+            nav_search: "Tìm kiếm",
             nav_map: "Bản đồ",
             not_found: "Không tìm thấy",
             footer_acknowledgements: "Tri ân",
@@ -59,6 +69,8 @@ mod tests {
         let all: Vec<Strings> = Language::ALL.into_iter().map(of).collect();
         for s in &all {
             for text in [
+                s.nav_learn,
+                s.nav_search,
                 s.nav_map,
                 s.not_found,
                 s.footer_acknowledgements,

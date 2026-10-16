@@ -1,5 +1,5 @@
 //! The Tauri configuration, read as data: the fixed identity, the window, the
-//! CSP, and that the webview is given no command and no permission.
+//! CSP, the bundle, and the webview's one capability (the six commands).
 
 use std::path::Path;
 
@@ -72,6 +72,9 @@ fn the_front_is_embedded_from_the_trunk_dist() {
 }
 
 /// An allowlist: exactly these five directives with exactly these sources.
+/// `connect-src` gains Tauri's IPC (`ipc:`, and `http://ipc.localhost`, its
+/// fallback): the commands go through it; `'self'` stays for the map's
+/// bundled data (`tauri://localhost/map-data/`).
 /// A sixth directive, or one more source in any of them, fails.
 #[test]
 fn the_csp_is_exactly_the_designs_five_directives() {
@@ -79,7 +82,10 @@ fn the_csp_is_exactly_the_designs_five_directives() {
         ("default-src", vec!["'self'"]),
         ("script-src", vec!["'self'", "'wasm-unsafe-eval'"]),
         ("style-src", vec!["'self'", "'unsafe-inline'"]),
-        ("connect-src", vec!["'self'"]),
+        (
+            "connect-src",
+            vec!["'self'", "ipc:", "http://ipc.localhost"],
+        ),
         ("img-src", vec!["'self'", "data:"]),
     ]
     .into_iter()
@@ -98,9 +104,29 @@ fn the_bundle_is_the_app_only() {
     assert_eq!(config()["bundle"]["targets"], serde_json::json!(["app"]));
 }
 
+/// The webview's one capability, on the main window only: the bridge's six
+/// commands and the listen of events (the `progress-status` event), nothing
+/// else (no opener, dialog, fs or other core permission). The app manifest
+/// (`build.rs`) declares exactly the six, so any other app command would be
+/// refused too. No global `window.__TAURI__`.
 #[test]
-fn the_webview_has_no_permission() {
-    assert!(!manifest_dir().join("capabilities").exists());
+fn the_capability_is_the_six_commands_and_event_listen() {
+    let dir = manifest_dir().join("capabilities");
+    let files: Vec<_> = std::fs::read_dir(&dir)
+        .expect("capabilities/")
+        .map(|e| e.unwrap().file_name().into_string().unwrap())
+        .collect();
+    assert_eq!(files, ["default.json"]);
+    let text = std::fs::read_to_string(dir.join("default.json")).unwrap();
+    let capability: Value = serde_json::from_str(&text).expect("JSON");
+    assert_eq!(capability["windows"], serde_json::json!(["main"]));
+    let mut expected: Vec<String> = palicanon_app_bridge::COMMANDS
+        .iter()
+        .map(|c| format!("allow-{}", c.replace('_', "-")))
+        .collect();
+    expected.push("core:event:allow-listen".into());
+    assert_eq!(capability["permissions"], serde_json::json!(expected));
+    assert!(capability.get("remote").is_none(), "no remote origin");
     let config = config();
     assert!(config["app"]["security"].get("capabilities").is_none());
     assert!(

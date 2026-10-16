@@ -1,7 +1,8 @@
-//! No door: the webview has no command and no permission. Two proofs.
+//! The webview's door is the six commands and event listen, nothing else.
+//! Two proofs.
 //!
-//! 1. What `tauri-build` generates from this crate's capabilities is empty:
-//!    no capability grants anything to any window.
+//! 1. What `tauri-build` generates from this crate's capabilities is one
+//!    capability granting exactly those.
 //! 2. The real ACL, in the real context, refuses the plugins' commands: the
 //!    app is built on Tauri's mock runtime with the app's own `configure`
 //!    and `generate_context!()`, and IPC messages as the webview would send
@@ -31,13 +32,35 @@ fn request(cmd: &str, body: serde_json::Value) -> InvokeRequest {
     }
 }
 
+/// What tauri-build generates from `capabilities/`: one capability, the
+/// six commands and event listen.
 #[test]
-fn the_generated_capabilities_grant_nothing() {
+fn the_generated_capabilities_grant_the_six_commands_and_listen() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("gen/schemas/capabilities.json");
     let text = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("tauri-build writes {}: {e}", path.display()));
     let capabilities: serde_json::Value = serde_json::from_str(&text).expect("JSON");
-    assert_eq!(capabilities, serde_json::json!({}), "{text}");
+    let all = capabilities.as_object().expect("an object");
+    assert_eq!(all.len(), 1, "{text}");
+    let mut granted: Vec<&str> = all["default"]["permissions"]
+        .as_array()
+        .expect("permissions")
+        .iter()
+        .map(|p| p.as_str().expect("an identifier"))
+        .collect();
+    granted.sort_unstable();
+    assert_eq!(
+        granted,
+        [
+            "allow-export-file",
+            "allow-import-file",
+            "allow-progress-load",
+            "allow-progress-save",
+            "allow-search",
+            "allow-search-status",
+            "core:event:allow-listen",
+        ]
+    );
 }
 
 #[test]
@@ -53,7 +76,30 @@ fn the_webview_cannot_invoke_a_plugin_command() {
     assert_eq!(windows.len(), 1, "exactly one window: {:?}", windows.keys());
     assert!(windows.contains_key("main"));
     let webview = app.get_webview_window("main").expect("the main window");
-    for (cmd, body) in [
+    for (cmd, body) in refused() {
+        let answer = get_ipc_response(&webview, request(cmd, body));
+        let refusal = answer
+            .expect_err(&format!("{cmd} must be refused"))
+            .to_string();
+        assert!(refusal.contains("not allowed"), "{cmd}: {refusal}");
+    }
+    the_open_door(&webview);
+}
+
+fn app_under_test() -> tauri::App<tauri::test::MockRuntime> {
+    let data = std::env::temp_dir().join(format!("pc-acl-{}", std::process::id()));
+    palicanon_app_desktop::configure(
+        mock_builder(),
+        Vec::new(),
+        palicanon_app_desktop::DataDir::At(data),
+    )
+    .build(tauri::generate_context!())
+    .expect("the app builds on the mock runtime")
+}
+
+/// The plugin commands the webview must be refused, with plausible bodies.
+fn refused() -> Vec<(&'static str, serde_json::Value)> {
+    vec![
         (
             "plugin:opener|open_url",
             serde_json::json!({ "url": "https://example.invalid/" }),
@@ -82,22 +128,25 @@ fn the_webview_cannot_invoke_a_plugin_command() {
             serde_json::json!({ "path": "/etc/hosts" }),
         ),
         ("plugin:event|emit", serde_json::json!({ "event": "x" })),
-    ] {
-        let answer = get_ipc_response(&webview, request(cmd, body));
-        let refusal = answer
-            .expect_err(&format!("{cmd} must be refused"))
-            .to_string();
-        assert!(refusal.contains("not allowed"), "{cmd}: {refusal}");
-    }
+        (
+            "plugin:event|unlisten",
+            serde_json::json!({ "event": "x", "eventId": 1 }),
+        ),
+        ("plugin:app|version", serde_json::json!({})),
+    ]
 }
 
-fn app_under_test() -> tauri::App<tauri::test::MockRuntime> {
-    let data = std::env::temp_dir().join(format!("pc-acl-{}", std::process::id()));
-    palicanon_app_desktop::configure(
-        mock_builder(),
-        Vec::new(),
-        palicanon_app_desktop::DataDir::At(data),
-    )
-    .build(tauri::generate_context!())
-    .expect("the app builds on the mock runtime")
+/// The door that is open: listening to an event (the progress status),
+/// and the app's own commands (tests/commands.rs calls them all).
+fn the_open_door(webview: &tauri::WebviewWindow<tauri::test::MockRuntime>) {
+    let listen = get_ipc_response(
+        webview,
+        request(
+            "plugin:event|listen",
+            serde_json::json!({ "event": "progress-status", "target": { "kind": "Any" }, "handler": 7 }),
+        ),
+    );
+    assert!(listen.is_ok(), "{:?}", listen.err().map(|e| e.to_string()));
+    let load = get_ipc_response(webview, request("progress_load", serde_json::json!({})));
+    assert!(load.is_ok(), "{:?}", load.err().map(|e| e.to_string()));
 }

@@ -90,13 +90,14 @@ fn Shell(children: Children) -> impl IntoView {
     }
 }
 
-/// The routes alone, without the shell: `/` goes to `/map`, `/map` mounts the
-/// map, anything else is the "Not found" page.
+/// The routes alone, without the shell: `/` goes to `/learn`; `/learn`
+/// mounts Learn, `/search` Search, `/map` the map; anything else is the
+/// "Not found" page.
 #[component]
 pub fn AppRoutes() -> impl IntoView {
     view! {
         <Routes fallback=NotFound>
-            <Route path=path!("") view=|| view! { <Redirect path="/map" /> } />
+            <Route path=path!("") view=|| view! { <Redirect path="/learn" /> } />
             <LearnMount />
             <SearchMount />
             <MapMount />
@@ -167,9 +168,9 @@ mod tests {
     }
 
     #[test]
-    fn the_root_redirects_to_the_map() {
+    fn the_root_redirects_to_learn() {
         let (_, to) = render("/");
-        assert_eq!(to.as_deref(), Some("/map"));
+        assert_eq!(to.as_deref(), Some("/learn"));
     }
 
     /// The map's route table is the real `MapRoutes` under `/map`: the map's

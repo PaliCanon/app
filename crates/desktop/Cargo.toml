@@ -9,6 +9,8 @@ repository.workspace = true
 publish = false
 
 [build-dependencies]
+# The six command names, declared in the app manifest (build.rs).
+palicanon-app-bridge = { path = "../bridge" }
 tauri-build = { version = "2", features = [] }
 
 [dependencies]

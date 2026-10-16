@@ -3,11 +3,12 @@
 //!
 //! The progress is loaded first (`progress_load`), the store built from it
 //! ([`progress::AppStore`]), then the app mounted: Learn's progress context
-//! above one router inside ui-lib's `AppShell`, a rail with the app's
-//! services, the routes (`/learn` mounts Learn, `/search` Search over the
-//! local engine, `/map` the map, any other address is "Not found"), Settings with Learn's 'Your progress', ui-lib's
-//! footer with the app's own links. The browser entry is `main.rs`; the
-//! bridge to the shell is the `tauri` module (browser only).
+//! above one router inside ui-lib's `AppShell`, a rail with the app's three
+//! services (Learn, Search, the Map), the routes (`/` goes to `/learn`;
+//! `/learn` mounts Learn, `/search` Search over the local engine, `/map` the
+//! map; any other address is "Not found"), Settings with Learn's 'Your
+//! progress', ui-lib's footer with the app's own links. The browser entry is
+//! `main.rs`; the bridge to the shell is the `tauri` module (browser only).
 
 // The shell around Learn is a deep view type (learn-pali does the same).
 #![recursion_limit = "512"]
