@@ -1,0 +1,38 @@
+# Lets cargo (and cargo-deny, which runs `cargo metadata`) fetch the private
+# git dependencies of this workspace over https: ui-lib (Cargo.toml pins its
+# tag) and, with vizualisation 012's first tag, the map crate.
+#
+# The credential is the GitHub App `palicanon-ci` (Contents: read): the action
+# mints a one-hour token limited to the repositories below, revoked when the
+# job ends (create-github-app-token's post step). Cargo.lock names the
+# sources as `ssh://git@github.com/...`; the git config rewrites that prefix
+# to the token's https URL for this job, and `git` does the fetching (no ssh
+# key, no ssh agent). The token is never written to a repository file.
+name: Private git dependencies
+description: Mint a read-only token and point cargo's ssh git sources at it.
+inputs:
+  app-id:
+    description: The GitHub App's id (a repository secret of the caller).
+    required: true
+  private-key:
+    description: The GitHub App's private key (a repository secret of the caller).
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Mint a token for the private dependencies, Contents read
+      id: app
+      uses: actions/create-github-app-token@v2
+      with:
+        app-id: ${{ inputs.app-id }}
+        private-key: ${{ inputs.private-key }}
+        owner: PaliCanon
+        repositories: ui-lib
+        permission-contents: read
+    - name: Point the ssh git sources at the token
+      shell: bash
+      env:
+        TOKEN: ${{ steps.app.outputs.token }}
+      run: |
+        git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+        echo "CARGO_NET_GIT_FETCH_WITH_CLI=true" >> "$GITHUB_ENV"

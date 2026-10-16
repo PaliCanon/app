@@ -1,8 +1,18 @@
-# From learn-pali's ci.yml, minus everything Leptos, ui-lib and infrastructure
-# specific: nothing here depends on ui-lib yet, so there is one checkout and
-# no private dependency. The Tauri builds (macOS in T5a, iOS in T6) join this
-# file when the shell exists. `--locked` everywhere: the committed Cargo.lock
-# is what CI verifies.
+# From learn-pali's ci.yml, adapted to this workspace (crates/identity,
+# crates/front, crates/desktop, crates/xtask). `--locked` everywhere: the
+# committed Cargo.lock is what CI verifies.
+#
+# Two kinds of runner. The desktop crate is Tauri (WebKit on macOS), so every
+# job that compiles it runs on macos-latest; the rest (format, the front's
+# wasm lint, deny, the Trunk build) run on ubuntu-latest. The front is built
+# for wasm32 only by `clippy-front` and `front-build`; the native jobs also
+# compile it (its route tests render on the server side of Leptos).
+#
+# Every job that runs cargo uses the composite action `private-deps`: ui-lib
+# is a private git dependency (a tag), fetched with a one-hour GitHub App
+# token (secrets APP_ID and APP_PRIVATE_KEY), never an ssh key. cargo-deny is
+# installed on the runner (not the docker action) so it sees that
+# configuration.
 name: CI
 
 on:
@@ -12,51 +22,115 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # Tailwind's standalone CLI: the one cargo-leptos used (xtask css reads
+  # $TAILWIND, else cargo-leptos's cache).
+  TAILWIND_VERSION: v4.2.1
 
 jobs:
   fmt:
-    name: rustfmt
+    name: rustfmt and leptosfmt
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: leptosfmt
       - run: cargo fmt --check
+      - run: leptosfmt --check crates
 
   clippy:
-    name: clippy
-    runs-on: ubuntu-latest
+    name: clippy (native)
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: ./.github/actions/private-deps
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - run: cargo clippy --locked --all-targets -- -D warnings
 
-  test:
-    name: test
+  clippy-front:
+    name: clippy (front, wasm32)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: ./.github/actions/private-deps
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+          targets: wasm32-unknown-unknown
+      - run: cargo clippy --locked -p palicanon-app-front --lib --bins --tests --target wasm32-unknown-unknown -- -D warnings
+
+  # tests/browser.rs: the app in a real browser (csr::mount, the rail, /map
+  # mounts, a sibling route unmounts it). wasm-bindgen-test-runner drives a
+  # headless Chrome through chromedriver; ubuntu-latest ships Google Chrome
+  # and its matching chromedriver ($CHROMEWEBDRIVER). The runner must be the
+  # wasm-bindgen of Cargo.lock.
+  test-browser:
+    name: test (browser, headless Chrome)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/private-deps
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - id: wasm-bindgen
+        run: echo "version=$(cargo pkgid --locked wasm-bindgen | sed 's/.*@//')" >> "$GITHUB_OUTPUT"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@${{ steps.wasm-bindgen.outputs.version }}
+      - run: CHROMEDRIVER="$CHROMEWEBDRIVER/chromedriver" cargo test --locked -p palicanon-app-front --target wasm32-unknown-unknown --test browser
+        env:
+          CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: wasm-bindgen-test-runner
+
+  test:
+    name: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/private-deps
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --locked
 
   docs:
     name: rustdoc
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     env:
       RUSTDOCFLAGS: -D warnings
     steps:
       - uses: actions/checkout@v7
+      - uses: ./.github/actions/private-deps
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo doc --locked --no-deps
 
   msrv:
     name: msrv (1.88)
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: ./.github/actions/private-deps
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
       - uses: dtolnay/rust-toolchain@1.88
       # --locked: the committed Cargo.lock is what the MSRV claim is verified
       # against; a fresh resolution could pull a dependency with a higher MSRV.
@@ -67,15 +141,80 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - uses: ./.github/actions/private-deps
         with:
-          command: check advisories bans sources licenses
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - run: cargo deny check advisories bans sources licenses
 
-  coverage:
-    name: coverage
+  # The front built for the browser by Trunk (its pre_build hooks run
+  # `cargo xtask css` and `cargo xtask data`), as the desktop build embeds it.
+  front-build:
+    name: front (trunk build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: ./.github/actions/private-deps
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
+      - name: Tailwind CLI
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/tailwindcss" "https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/tailwindcss-linux-x64"
+          chmod +x "$RUNNER_TEMP/tailwindcss"
+          echo "TAILWIND=$RUNNER_TEMP/tailwindcss" >> "$GITHUB_ENV"
+      - run: trunk build --release --cargo-profile wasm-release
+        working-directory: crates/front
+
+  # The macOS bundle (unsigned: signing is task T7). `cargo tauri build` runs
+  # the Trunk build first (tauri.conf.json's beforeBuildCommand).
+  bundle:
+    name: macOS bundle (.app)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/private-deps
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk,tauri-cli
+      - name: Tailwind CLI
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/tailwindcss" "https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/tailwindcss-macos-arm64"
+          chmod +x "$RUNNER_TEMP/tailwindcss"
+          echo "TAILWIND=$RUNNER_TEMP/tailwindcss" >> "$GITHUB_ENV"
+      - run: cargo tauri build --bundles app
+        working-directory: crates/desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PaliCanon-macos-unsigned
+          path: target/release/bundle/macos/PaliCanon.app
+          if-no-files-found: error
+
+  coverage:
+    name: coverage
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/private-deps
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
