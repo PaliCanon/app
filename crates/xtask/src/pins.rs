@@ -228,18 +228,45 @@ fn directory(package: &Package) -> PathBuf {
 /// lockfile included: `--locked`).
 pub fn run_metadata(workspace: &std::path::Path) -> Result<String, PinsError> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-    let output = std::process::Command::new(cargo)
+    run_metadata_with(&cargo, workspace)
+}
+
+/// [`run_metadata`] with the `cargo` to run given.
+///
+/// # Errors
+/// As [`run_metadata`].
+pub fn run_metadata_with(
+    cargo: &std::ffi::OsStr,
+    workspace: &std::path::Path,
+) -> Result<String, PinsError> {
+    static CALLS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let failed = |e: std::io::Error| PinsError::Metadata(e.to_string());
+    // Output goes to files, not pipes: a daemon that cargo starts and leaves
+    // behind (sccache's server, under `RUSTC_WRAPPER`) inherits a pipe and
+    // keeps it open, and reading a pipe to its end would wait for the daemon.
+    // The wrapper is also switched off: `cargo metadata` compiles nothing.
+    let call = CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("xtask-metadata-{}-{call}", std::process::id()));
+    std::fs::create_dir_all(&dir).map_err(failed)?;
+    let (out_path, err_path) = (dir.join("stdout"), dir.join("stderr"));
+    let status = std::process::Command::new(cargo)
         .current_dir(workspace)
         .args(["metadata", "--locked", "--format-version", "1"])
         .args(["--filter-platform", PLATFORM])
-        .output()
-        .map_err(|e| PinsError::Metadata(e.to_string()))?;
-    if !output.status.success() {
-        return Err(PinsError::Metadata(
-            String::from_utf8_lossy(&output.stderr).trim().to_string(),
-        ));
+        .env("RUSTC_WRAPPER", "")
+        .env("RUSTC_WORKSPACE_WRAPPER", "")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::fs::File::create(&out_path).map_err(failed)?)
+        .stderr(std::fs::File::create(&err_path).map_err(failed)?)
+        .status()
+        .map_err(failed)?;
+    let stdout = std::fs::read_to_string(&out_path);
+    let stderr = std::fs::read_to_string(&err_path).unwrap_or_default();
+    let _ = std::fs::remove_dir_all(&dir);
+    if !status.success() {
+        return Err(PinsError::Metadata(stderr.trim().to_string()));
     }
-    String::from_utf8(output.stdout).map_err(|e| PinsError::Metadata(e.to_string()))
+    stdout.map_err(failed)
 }
 
 /// The pins of the workspace at `workspace`: [`run_metadata`], then [`read`]
@@ -482,6 +509,53 @@ mod tests {
             pins.ui_lib
         );
         assert!(pins.ui_lib.join("src").is_dir());
+    }
+
+    /// A `cargo` that leaves a daemon behind holding its output, as
+    /// sccache's server does when `RUSTC_WRAPPER` starts it (seen: the first
+    /// `cargo metadata` after the server's idle exit hung the Trunk build).
+    fn cargo_with_a_daemon(name: &str) -> std::path::PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let dir =
+            std::env::temp_dir().join(format!("xtask-fake-cargo-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = dir.join("cargo");
+        std::fs::write(&script, "#!/bin/sh\nsleep 8 &\necho '{\"packages\": []}'\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        script
+    }
+
+    #[test]
+    fn a_daemon_holding_cargos_output_does_not_hang_the_read() {
+        let cargo = cargo_with_a_daemon("daemon");
+        let started = std::time::Instant::now();
+        let out = run_metadata_with(cargo.as_os_str(), std::path::Path::new("."))
+            .expect("the fake cargo succeeds");
+        assert!(out.contains("packages"), "{out}");
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(4),
+            "waited for the daemon: {:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn a_failing_cargo_gives_its_stderr() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir =
+            std::env::temp_dir().join(format!("xtask-fake-cargo-fail-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = dir.join("cargo");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\necho 'lock needs an update' >&2\nexit 101\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let err = run_metadata_with(script.as_os_str(), std::path::Path::new(".")).unwrap_err();
+        assert_eq!(err, PinsError::Metadata("lock needs an update".into()));
+        let missing = run_metadata_with("/nonexistent/cargo".as_ref(), std::path::Path::new("."));
+        assert!(matches!(missing, Err(PinsError::Metadata(_))));
     }
 
     #[test]
