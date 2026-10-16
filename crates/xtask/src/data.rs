@@ -105,6 +105,33 @@ mod tests {
     }
 
     #[test]
+    fn the_files_are_the_designs_six_names() {
+        assert_eq!(
+            FILES,
+            [
+                "graph.json",
+                "graph-sim.json",
+                "graph-sim.bin",
+                "translations.json",
+                "blurbs-en.json",
+                "blurbs-fr.json"
+            ]
+        );
+    }
+
+    #[test]
+    fn an_output_that_cannot_be_created_is_a_failure() {
+        let map = map_with(&FILES, "unwritable");
+        let blocker = dir("unwritable-out").join("a-file");
+        std::fs::write(&blocker, "x").unwrap();
+        // The output's parent is a regular file.
+        let result = stage(Some(&map), &blocker.join("map-data"));
+        assert!(matches!(result, Err(DataError::Failed(_))), "{result:?}");
+        let result = stage(None, &blocker.join("map-data"));
+        assert!(matches!(result, Err(DataError::Failed(_))), "{result:?}");
+    }
+
+    #[test]
     fn the_six_files_are_copied() {
         let map = map_with(&FILES, "all");
         let out = dir("all-out").join("map-data");

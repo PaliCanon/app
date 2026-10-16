@@ -82,9 +82,15 @@ pub fn input(pins: &Pins) -> Result<String, CssError> {
 
 /// The classes the built CSS must hold for `pins`.
 pub fn markers(pins: &Pins) -> Vec<&'static str> {
+    markers_with(pins, MAP_MARKER)
+}
+
+/// [`markers`] with the map crate's marker given: it is required when, and
+/// only when, `pins` has a map crate.
+pub fn markers_with(pins: &Pins, map_marker: Option<&'static str>) -> Vec<&'static str> {
     let mut markers = vec![UI_LIB_MARKER];
     if pins.map.is_some() {
-        markers.extend(MAP_MARKER);
+        markers.extend(map_marker);
     }
     markers
 }
@@ -100,17 +106,31 @@ pub fn check_built(css: &str, markers: &[&str]) -> Result<(), CssError> {
     }
 }
 
-/// The Tailwind CLI: `$TAILWIND`, else the newest one `cargo-leptos` cached.
+/// The Tailwind CLI from the process environment: `$TAILWIND`, else the
+/// newest one `cargo-leptos` cached under `$HOME`.
 ///
 /// # Errors
 /// [`CssError::NoTailwind`] when there is none.
 pub fn tailwind_binary() -> Result<PathBuf, CssError> {
-    if let Some(path) = std::env::var_os("TAILWIND") {
+    find_tailwind(
+        std::env::var_os("TAILWIND"),
+        std::env::var_os("HOME").map(PathBuf::from),
+    )
+}
+
+/// [`tailwind_binary`] with the environment given: `tailwind` is `$TAILWIND`
+/// (an empty value counts as unset), `home` is `$HOME`.
+///
+/// # Errors
+/// [`CssError::NoTailwind`] without a variable, a home, or a cached CLI.
+pub fn find_tailwind(
+    tailwind: Option<std::ffi::OsString>,
+    home: Option<PathBuf>,
+) -> Result<PathBuf, CssError> {
+    if let Some(path) = tailwind.filter(|p| !p.is_empty()) {
         return Ok(PathBuf::from(path));
     }
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .ok_or(CssError::NoTailwind)?;
+    let home = home.ok_or(CssError::NoTailwind)?;
     let mut found: Vec<PathBuf> = Vec::new();
     for cache in [
         home.join("Library/Caches/cargo-leptos"),
@@ -145,19 +165,20 @@ fn read_dir(dir: &Path) -> Vec<PathBuf> {
         .unwrap_or_default()
 }
 
-/// Builds the app's CSS into `<root>/target/css/app.css` and checks it.
+/// Builds the app's CSS into `<root>/target/css/app.css` with the Tailwind
+/// CLI at `tailwind`, and checks it.
 ///
 /// # Errors
 /// A [`CssError`]: a missing source, no Tailwind, a failed run, or a built
 /// CSS without a marker class.
-pub fn build(root: &Path, pins: &Pins) -> Result<PathBuf, CssError> {
+pub fn build(root: &Path, pins: &Pins, tailwind: &Path) -> Result<PathBuf, CssError> {
     let failed = |e: std::io::Error| CssError::Failed(e.to_string());
     let input_css = input(pins)?;
     let dir = root.join("target/css");
     std::fs::create_dir_all(&dir).map_err(failed)?;
     let (input_path, output) = (dir.join("input.css"), dir.join("app.css"));
     std::fs::write(&input_path, input_css).map_err(failed)?;
-    let status = std::process::Command::new(tailwind_binary()?)
+    let status = std::process::Command::new(tailwind)
         .arg("-i")
         .arg(&input_path)
         .arg("-o")
@@ -266,11 +287,96 @@ mod tests {
     }
 
     #[test]
-    fn the_markers_follow_the_map_crate() {
+    fn the_map_marker_is_required_exactly_when_the_pins_have_a_map_crate() {
         let (root, mut pins) = tree();
-        assert_eq!(markers(&pins), [UI_LIB_MARKER]);
+        assert_eq!(markers_with(&pins, Some(".map-only")), [UI_LIB_MARKER]);
         pins.map = Some(root.join("map"));
-        assert_eq!(markers(&pins).len(), 1 + usize::from(MAP_MARKER.is_some()));
+        assert_eq!(
+            markers_with(&pins, Some(".map-only")),
+            [UI_LIB_MARKER, ".map-only"]
+        );
+        // The shipped markers are those of the same rule.
+        assert_eq!(markers(&pins), markers_with(&pins, MAP_MARKER));
+    }
+
+    /// A fake `$HOME` holding the CLI where cargo-leptos puts it.
+    fn home_with(files: &[&str], name: &str) -> PathBuf {
+        let home = std::env::temp_dir().join(format!("xtask-home-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        for file in files {
+            let path = home.join(file);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, "").unwrap();
+        }
+        std::fs::create_dir_all(&home).unwrap();
+        home
+    }
+
+    #[test]
+    fn the_variable_wins_and_an_empty_one_is_unset() {
+        let home = home_with(
+            &["Library/Caches/cargo-leptos/t-1/t-1/tailwindcss-x"],
+            "var",
+        );
+        assert_eq!(
+            find_tailwind(Some("/opt/tw".into()), Some(home.clone())),
+            Ok(PathBuf::from("/opt/tw"))
+        );
+        assert_eq!(
+            find_tailwind(Some("".into()), Some(home.clone())),
+            Ok(home.join("Library/Caches/cargo-leptos/t-1/t-1/tailwindcss-x"))
+        );
+    }
+
+    #[test]
+    fn no_variable_and_no_home_is_no_tailwind() {
+        assert_eq!(find_tailwind(None, None), Err(CssError::NoTailwind));
+    }
+
+    #[test]
+    fn an_empty_or_missing_cache_is_no_tailwind() {
+        let empty = home_with(&[], "empty");
+        assert_eq!(find_tailwind(None, Some(empty)), Err(CssError::NoTailwind));
+        let other = home_with(
+            &["Library/Caches/cargo-leptos/wasm-opt-1/wasm-opt-1/wasm-opt"],
+            "other",
+        );
+        assert_eq!(find_tailwind(None, Some(other)), Err(CssError::NoTailwind));
+    }
+
+    #[test]
+    fn the_cache_walk_finds_the_cli_at_cargo_leptos_depth_and_takes_the_newest() {
+        let base = "Library/Caches/cargo-leptos";
+        let home = home_with(
+            &[
+                &format!("{base}/tailwindcss-v4.2.1/tailwindcss-v4.2.1/tailwindcss-macos-arm64"),
+                &format!("{base}/tailwindcss-v4.3.0/tailwindcss-v4.3.0/tailwindcss-macos-arm64"),
+                // Too deep, a directory name, and other tools: not the CLI.
+                &format!("{base}/a/b/c/tailwindcss-deep"),
+                &format!("{base}/tailwindcss-v9/tailwindcss-v9/not-tailwind"),
+            ],
+            "walk",
+        );
+        assert_eq!(
+            find_tailwind(None, Some(home.clone())),
+            Ok(home.join(format!(
+                "{base}/tailwindcss-v4.3.0/tailwindcss-v4.3.0/tailwindcss-macos-arm64"
+            )))
+        );
+        let linux = home_with(
+            &[".cache/cargo-leptos/tailwindcss-v4/tailwindcss-v4/tailwindcss-linux-x64"],
+            "linux",
+        );
+        assert!(find_tailwind(None, Some(linux)).is_ok());
+    }
+
+    #[test]
+    fn a_failing_or_missing_cli_fails_the_build() {
+        let (root, pins) = tree();
+        for cli in ["/usr/bin/false", "/nonexistent/tailwindcss"] {
+            let err = build(&root, &pins, Path::new(cli)).unwrap_err();
+            assert!(matches!(err, CssError::Failed(_)), "{cli}: {err}");
+        }
     }
 
     #[test]

@@ -142,6 +142,21 @@ mod tests {
         }
     }
 
+    #[test]
+    fn the_files_are_the_designs_six_names() {
+        assert_eq!(
+            FILES,
+            [
+                "graph.json",
+                "graph-sim.json",
+                "graph-sim.bin",
+                "translations.json",
+                "blurbs-en.json",
+                "blurbs-fr.json"
+            ]
+        );
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn the_files_are_the_build_tasks_files() {
