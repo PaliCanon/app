@@ -72,6 +72,8 @@ jobs:
         with:
           components: clippy
           targets: wasm32-unknown-unknown
+      # The browser test embeds the map's staged data files.
+      - run: cargo xtask data
       - run: cargo clippy --locked -p palicanon-app-front --lib --bins --tests --target wasm32-unknown-unknown -- -D warnings
 
   # tests/browser.rs: the app in a real browser (csr::mount, the rail, /map
@@ -96,9 +98,12 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: wasm-bindgen@${{ steps.wasm-bindgen.outputs.version }}
+      - run: cargo xtask data
       - run: CHROMEDRIVER="$CHROMEWEBDRIVER/chromedriver" cargo test --locked -p palicanon-app-front --target wasm32-unknown-unknown --test browser
         env:
           CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: wasm-bindgen-test-runner
+          # The map's first draw in a debug build under SwiftShader is slow.
+          WASM_BINDGEN_TEST_TIMEOUT: 900
 
   test:
     name: test
