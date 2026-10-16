@@ -10,7 +10,7 @@ use palicanon_ui_lib::{AppShell, Footer, NavList, language_signal, provide_langu
 use std::rc::Rc;
 use std::sync::Arc;
 
-use learn_pali::fragment::{LearnProvider, LearnSettings, SharedFiles, SharedStore};
+use learn_pali::fragment::{LearnProvider, LearnSettings, SharedFiles, SharedStore, SharedSync};
 use vizualisation::fragment::MapData;
 
 use crate::data::{BrowserFetch, BundledData};
@@ -20,6 +20,8 @@ use crate::map_mount::{MapMount, MapSource};
 use crate::progress::AppStore;
 use crate::search::AppSearch;
 use crate::search_mount::SearchMount;
+use crate::sync::AppSync;
+use crate::sync_link::SignInLink;
 use crate::{nav, strings};
 
 /// The app root over the progress `store` (built from `progress_load`
@@ -33,14 +35,19 @@ pub fn App(
     files: AppFiles,
     /// Search over the local engine.
     search: AppSearch,
+    /// The sync through the learner's Google Drive; none: no sync UI (a
+    /// build without the OAuth secret).
+    #[prop(optional_no_strip)]
+    sync: Option<AppSync>,
 ) -> impl IntoView {
     let data: Arc<dyn MapData> = Arc::new(BundledData::<BrowserFetch>::default());
-    view! { <AppWith data=data store=store files=files search=search /> }
+    view! { <AppWith data=data store=store files=files search=search sync=sync /> }
 }
 
 /// The app over given sources (the browser test gives fakes): the language
 /// signal of the page, Learn's progress context (above the router: a store
-/// is not `Send`), then the router around the shell.
+/// is not `Send`) with the sync when there is one, then the router around
+/// the shell, and the sign-in link's dialog.
 #[component]
 pub fn AppWith(
     /// Where the map reads its data files from.
@@ -51,20 +58,28 @@ pub fn AppWith(
     files: AppFiles,
     /// What answers the searches.
     search: AppSearch,
+    /// The sync; none: no sync UI.
+    #[prop(optional_no_strip)]
+    sync: Option<AppSync>,
 ) -> impl IntoView {
     provide_language();
     provide_context(MapSource(data));
     provide_context(search);
     let store: SharedStore = Rc::new(store);
     let files: SharedFiles = Rc::new(files);
+    let transport = sync.clone().map(|sync| Rc::new(sync) as SharedSync);
+    // Beside the provider, not in its children (they must be `Send`; the
+    // sync holds an `Rc`).
+    let link = sync.map(|sync| view! { <SignInLink sync=sync /> });
     view! {
-        <LearnProvider store=store files=files>
+        <LearnProvider store=store files=files sync=transport>
             <Router>
                 <Shell>
                     <AppRoutes />
                 </Shell>
             </Router>
         </LearnProvider>
+        {link}
     }
 }
 

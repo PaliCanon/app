@@ -9,8 +9,10 @@ use std::rc::Rc;
 
 use palicanon_app_bridge::{
     EXPORT_FILE, ExportArgs, IMPORT_FILE, ImportAnswer, LoadAnswer, PROGRESS_LOAD, PROGRESS_SAVE,
-    PROGRESS_STATUS_EVENT, SEARCH, SEARCH_STATUS, SaveArgs, SearchAnswer, SearchRequest,
-    SearchStatus, StatusEvent,
+    PROGRESS_STATUS_EVENT, PullAnswer, PushAnswer, PushArgs, SEARCH, SEARCH_STATUS, SYNC_ACCOUNT,
+    SYNC_CANCEL, SYNC_PULL, SYNC_PUSH, SYNC_SIGN_IN, SYNC_SIGN_IN_EVENT, SYNC_SIGN_OUT, SaveArgs,
+    SearchAnswer, SearchRequest, SearchStatus, SignInEvent, SignInStart, StatusEvent,
+    SyncAccountAnswer, SyncFailure,
 };
 use send_wrapper::SendWrapper;
 use serde::Serialize;
@@ -21,6 +23,7 @@ use wasm_bindgen_futures::JsFuture;
 use crate::files::FilesPort;
 use crate::progress::{AppStore, ProgressPort};
 use crate::search::{PortFuture, SearchPort};
+use crate::sync::{AppSync, SyncPort};
 
 #[wasm_bindgen]
 extern "C" {
@@ -72,32 +75,112 @@ pub async fn progress_load() -> Result<LoadAnswer, String> {
     invoke(PROGRESS_LOAD, &NoArgs {}).await
 }
 
-/// Listens to the `progress-status` event for the whole session: each one
-/// applied to `store`. The listener lives as long as the page.
-pub fn listen_progress(store: AppStore) {
+/// Listens to the shell's event `name` for the whole session, each payload
+/// read as a `T` and handed to `apply`. The listener lives as long as the
+/// page.
+fn listen<T: DeserializeOwned + 'static>(name: &'static str, apply: impl Fn(T) + 'static) {
     let handler = Closure::<dyn Fn(JsValue)>::new(move |event: JsValue| {
         let payload = js_sys::Reflect::get(&event, &"payload".into()).unwrap_or(JsValue::NULL);
         let text = js_sys::JSON::stringify(&payload)
             .ok()
             .and_then(|s| s.as_string())
             .unwrap_or_default();
-        match serde_json::from_str::<StatusEvent>(&text) {
-            Ok(status) => store.apply(status),
-            Err(e) => web_sys::console::warn_1(&format!("progress-status: {e}").into()),
+        match serde_json::from_str::<T>(&text) {
+            Ok(value) => apply(value),
+            Err(e) => web_sys::console::warn_1(&format!("{name}: {e}").into()),
         }
     });
     let id = transform_callback(handler.as_ref().unchecked_ref(), false);
     handler.forget();
     let args = serde_json::json!({
-        "event": PROGRESS_STATUS_EVENT,
+        "event": name,
         "target": { "kind": "Any" },
         "handler": id,
     });
     wasm_bindgen_futures::spawn_local(async move {
         if let Err(e) = invoke::<serde_json::Value>("plugin:event|listen", &args).await {
-            web_sys::console::error_1(&format!("cannot listen to progress-status: {e}").into());
+            web_sys::console::error_1(&format!("cannot listen to {name}: {e}").into());
         }
     });
+}
+
+/// Listens to the `progress-status` event for the whole session: each one
+/// applied to `store`.
+pub fn listen_progress(store: AppStore) {
+    listen::<StatusEvent>(PROGRESS_STATUS_EVENT, move |status| store.apply(status));
+}
+
+/// Listens to the `sync-sign-in` event for the whole session: each one
+/// applied to `sync`.
+pub fn listen_sync(sync: AppSync) {
+    listen::<SignInEvent>(SYNC_SIGN_IN_EVENT, move |event| sync.apply(event));
+}
+
+/// `sync_account()`: whether this build syncs, and who is signed in; read
+/// before the mount. A failed call is no sync.
+pub async fn sync_account() -> SyncAccountAnswer {
+    invoke(SYNC_ACCOUNT, &NoArgs {})
+        .await
+        .unwrap_or(SyncAccountAnswer::Unavailable)
+}
+
+/// Calls `cmd` and hands its answer to `done`; a failed call is `failed`.
+fn answer<T: DeserializeOwned + 'static>(
+    cmd: &'static str,
+    args: impl Serialize + 'static,
+    failed: impl FnOnce(SyncFailure) -> T + 'static,
+    done: Box<dyn FnOnce(T)>,
+) {
+    wasm_bindgen_futures::spawn_local(async move {
+        let answer = invoke::<T>(cmd, &args).await.unwrap_or_else(|e| {
+            web_sys::console::warn_1(&format!("{cmd}: {e}").into());
+            failed(SyncFailure::Network)
+        });
+        done(answer);
+    });
+}
+
+/// Calls `cmd`, its answer only logged when it fails.
+fn fire(cmd: &'static str) {
+    wasm_bindgen_futures::spawn_local(async move {
+        if let Err(e) = invoke::<()>(cmd, &NoArgs {}).await {
+            web_sys::console::warn_1(&format!("{cmd}: {e}").into());
+        }
+    });
+}
+
+/// The sync, to the shell's six sync commands.
+pub struct TauriSync;
+
+impl SyncPort for TauriSync {
+    fn sign_in(&self, done: Box<dyn FnOnce(SignInStart)>) {
+        answer(SYNC_SIGN_IN, NoArgs {}, SignInStart::Failed, done);
+    }
+
+    fn cancel(&self) {
+        fire(SYNC_CANCEL);
+    }
+
+    fn pull(&self, done: Box<dyn FnOnce(PullAnswer)>) {
+        answer(SYNC_PULL, NoArgs {}, PullAnswer::Failed, done);
+    }
+
+    fn push(&self, text: String, done: Box<dyn FnOnce(PushAnswer)>) {
+        answer(SYNC_PUSH, PushArgs { text }, PushAnswer::Failed, done);
+    }
+
+    fn account(&self, done: Box<dyn FnOnce(SyncAccountAnswer)>) {
+        answer(
+            SYNC_ACCOUNT,
+            NoArgs {},
+            |_| SyncAccountAnswer::Unavailable,
+            done,
+        );
+    }
+
+    fn sign_out(&self) {
+        fire(SYNC_SIGN_OUT);
+    }
 }
 
 /// The saves, to `progress_save`.
