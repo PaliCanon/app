@@ -1,0 +1,17 @@
+[package]
+name = "palicanon-app-front"
+description = "The PaliCanon app's front: client-side Leptos on ui-lib, built to wasm by Trunk"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+leptos = { workspace = true, features = ["csr"] }
+leptos_router.workspace = true
+palicanon-ui-lib.workspace = true
+
+[lints]
+workspace = true
