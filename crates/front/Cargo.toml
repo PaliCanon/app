@@ -47,7 +47,7 @@ xtask = { path = "../xtask" }
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 map-engine.workspace = true
 wasm-bindgen-test = "0.3"
-web-sys = { version = "0.3", features = ["Document", "Element", "HtmlElement", "Location", "Node", "Window"] }
+web-sys = { version = "0.3", features = ["Document", "Element", "HtmlElement", "Location", "Node", "NodeList", "Window"] }
 
 [lints]
 workspace = true

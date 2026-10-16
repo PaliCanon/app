@@ -1,16 +1,19 @@
 //! The app in a real browser (a headless Chrome through
 //! `wasm-bindgen-test-runner`): `csr::mount` builds the page from an empty
-//! body, the rail is there, `/` lands on `/map` and the real map mounts over a
-//! fake `MapData` (the staged data files), a sibling route unmounts it and the
-//! engine's live views fall back to 0, the rail's Map link brings it back, and
-//! none of it panics (a panic fails the test).
+//! body; the rail lists Learn, Search and the Map; `/` lands on `/learn`,
+//! Learn's home shows over the app's store, and a Learn answer reaches the
+//! fake `progress_save` (the next seq, a state's JSON); the rail's Map link
+//! mounts the real map over a fake `MapData` (the staged data files), a
+//! sibling route unmounts it and the engine's live views fall back to 0, the
+//! Map link brings it back, and none of it panics (a panic fails the test).
+//! One test, one page: `csr::mount` mounts into `<body>` and leaks its tree.
 //!
 //! The data files are the ones `cargo xtask data` stages in `target/map-data`
 //! (run it first; the build fails without them). Headless Chrome draws with
 //! `WebGL2` (`SwiftShader`), so the first draw is slow in a debug build.
 //!
 //! ```sh
-//! cargo xtask data
+//! cargo xtask data && cargo xtask assets
 //! CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
 //!   CHROMEDRIVER=<chromedriver matching Chrome> WASM_BINDGEN_TEST_TIMEOUT=600 \
 //!   cargo test --locked -p palicanon-app-front --target wasm32-unknown-unknown --test browser
@@ -183,13 +186,73 @@ fn mount(data: Arc<dyn MapData>, ports: &Ports) {
     );
 }
 
-#[wasm_bindgen_test]
-async fn the_app_draws_the_map_and_a_sibling_route_releases_it() {
-    let fake = Fake::default();
-    let data: Arc<dyn MapData> = Arc::new(fake.clone());
-    mount(data, &Ports::default());
+/// The first visible `<button>` whose text contains `label` (Learn renders
+/// its grade buttons before the reveal, hidden).
+fn button(label: &str) -> Option<web_sys::HtmlElement> {
+    let buttons = document().query_selector_all("button").expect("buttons");
+    (0..buttons.length())
+        .filter_map(|at| buttons.item(at))
+        .filter_map(|node| node.dyn_into::<web_sys::HtmlElement>().ok())
+        .filter(|b| b.offset_parent().is_some() && !b.has_attribute("disabled"))
+        .find(|b| b.text_content().is_some_and(|text| text.contains(label)))
+}
 
-    // `/` lands on `/map`; the real map mounts and its engine starts.
+/// Clicks the button `label` once it is there and visible.
+async fn click(label: &str) {
+    until(&format!("the {label} button"), || button(label).is_some()).await;
+    button(label).expect("the button").click();
+}
+
+/// `/` lands on `/learn`, the home shows, the rail lists the three services,
+/// and a Learn answer reaches the fake `progress_save`.
+async fn learn_saves_an_answer(ports: &Ports) {
+    until("the address is /learn", || pathname() == "/learn").await;
+    until("Learn's home", || {
+        document()
+            .query_selector(r#"[data-page="home"]"#)
+            .ok()
+            .flatten()
+            .is_some()
+    })
+    .await;
+    for href in ["/learn", "/search", "/map"] {
+        assert!(
+            document()
+                .query_selector(&format!(r#"nav a[href="{href}"]"#))
+                .ok()
+                .flatten()
+                .is_some(),
+            "the rail links to {href}: {}",
+            page_text()
+        );
+    }
+    assert_eq!(ports.saves.borrow().len(), 0, "mounting saves nothing");
+    // An empty progress: the "+" opens the new terms' chooser, "Add" adds
+    // them and starts the session, then the first card is answered.
+    click("+").await;
+    click("Add").await;
+    let before = ports.saves.borrow().len();
+    click("Show the answer").await;
+    click("Knew it").await;
+    until("an answer is saved", || ports.saves.borrow().len() > before).await;
+    let saves = ports.saves.borrow();
+    let (seq, text) = saves.last().expect("a save");
+    assert_eq!(
+        *seq,
+        u64::try_from(saves.len()).unwrap(),
+        "seq counts the saves"
+    );
+    let state = learn_core::progress::State::from_json(text).expect("a state's JSON");
+    assert_ne!(state.progress.len(), 0, "{text}");
+}
+
+/// The rail's Map link mounts the real map over the fake data; its engine
+/// starts, the rail marks the Map current, the footer links to the main site.
+async fn the_map_draws(fake: &Fake) {
+    rail_map_link()
+        .dyn_into::<web_sys::HtmlElement>()
+        .expect("an element")
+        .click();
     until("the address is /map", || pathname() == "/map").await;
     until("the engine has a live view", || {
         map_engine::live_views() == 1
@@ -218,6 +281,16 @@ async fn the_app_draws_the_map_and_a_sibling_route_releases_it() {
         .query_selector(r#"a[href="https://palicanon.app/terms"]"#)
         .expect("a selector");
     assert!(terms.is_some());
+}
+
+#[wasm_bindgen_test]
+async fn the_app_runs_learn_then_draws_the_map_and_a_sibling_route_releases_it() {
+    let fake = Fake::default();
+    let data: Arc<dyn MapData> = Arc::new(fake.clone());
+    let ports = Ports::default();
+    mount(data, &ports);
+    learn_saves_an_answer(&ports).await;
+    the_map_draws(&fake).await;
 
     // A sibling route unmounts the map: its engine is dropped, the GPU released.
     follow_foreign_link("/elsewhere");
