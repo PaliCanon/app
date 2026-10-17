@@ -45,6 +45,12 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 sha2 = "0.10"
 tokio = { version = "1", features = ["net", "io-util", "time", "sync", "macros", "rt"] }
 
+# The Keychain's own error code (keyring keeps it as a platform failure's
+# source): the duplicate item, and the delete by attributes. The version
+# keyring 3 already uses.
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3"
+
 [dev-dependencies]
 # The mock runtime, to send the webview's IPC messages through the real ACL.
 tauri = { version = "2", features = ["test"] }

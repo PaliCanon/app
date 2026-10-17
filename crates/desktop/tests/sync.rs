@@ -8,13 +8,15 @@
 #[path = "support/fake_google.rs"]
 mod fake_google;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use palicanon_app_bridge::{PullAnswer, PushAnswer, SignInEvent, SyncAccountAnswer, SyncFailure};
-use palicanon_app_desktop::sync::{Endpoints, MemorySecrets, OAuthClient, Secrets, SyncService};
+use palicanon_app_desktop::sync::{
+    Endpoints, MemorySecrets, OAuthClient, SecretError, Secrets, SyncService,
+};
 use sha2::{Digest, Sha256};
 
 use fake_google::FakeGoogle;
@@ -398,6 +400,136 @@ async fn a_failed_revoke_still_forgets_the_token() {
     service.sign_out().await;
     assert_eq!(google.seen_at("POST", "/revoke").len(), 1);
     assert_eq!(secrets.get().unwrap(), None);
+}
+
+/// A Keychain holding an item another build made: `set` finds it already
+/// there (the duplicate) until a `delete` removes it, unless `stubborn`.
+#[derive(Default)]
+struct StaleSecrets {
+    stale: Mutex<bool>,
+    stubborn: bool,
+    unreadable: bool,
+    broken: bool,
+    value: Mutex<Option<String>>,
+    sets: Mutex<u32>,
+    deletes: Mutex<u32>,
+}
+
+impl Secrets for StaleSecrets {
+    fn get(&self) -> Result<Option<String>, String> {
+        if self.unreadable {
+            return Err("User interaction is not allowed".into());
+        }
+        Ok(self.value.lock().unwrap().clone())
+    }
+
+    fn set(&self, value: &str) -> Result<(), SecretError> {
+        *self.sets.lock().unwrap() += 1;
+        if self.broken {
+            return Err(SecretError::Other("the Keychain is locked".into()));
+        }
+        if *self.stale.lock().unwrap() {
+            return Err(SecretError::Duplicate);
+        }
+        *self.value.lock().unwrap() = Some(value.into());
+        Ok(())
+    }
+
+    fn delete(&self) -> Result<(), String> {
+        *self.deletes.lock().unwrap() += 1;
+        if !self.stubborn {
+            *self.stale.lock().unwrap() = false;
+        }
+        *self.value.lock().unwrap() = None;
+        Ok(())
+    }
+}
+
+/// A sign-in through `secrets` that Google grants (refresh token `rt1`).
+async fn sign_in_over(secrets: Arc<StaleSecrets>) -> SignInEvent {
+    let google = FakeGoogle::start().await;
+    google.answer(
+        "POST",
+        TOKEN,
+        200,
+        r#"{"access_token":"at1","expires_in":3599,"refresh_token":"rt1"}"#,
+    );
+    google.answer(
+        "GET",
+        "/oauth2/v3/userinfo",
+        200,
+        r#"{"email":"a@b.example"}"#,
+    );
+    let service = SyncService::new(client(), Endpoints::at(&google.base), secrets);
+    let pending = service.start_sign_in().await.expect("a sign-in starts");
+    let asked = the_address_asks_the_code(&pending.url, &google.base);
+    let redirect = asked["redirect_uri"].clone();
+    let finish = tokio::spawn(pending.finish);
+    get(&format!("{redirect}/?code=c0de&state={}", asked["state"])).await;
+    finish.await.unwrap()
+}
+
+#[tokio::test]
+async fn a_keychain_item_another_build_left_is_deleted_and_the_token_stored_again() {
+    let secrets = Arc::new(StaleSecrets {
+        stale: Mutex::new(true),
+        ..StaleSecrets::default()
+    });
+    let event = sign_in_over(secrets.clone()).await;
+    assert_eq!(event.outcome, Ok(Some("a@b.example".into())));
+    assert_eq!(secrets.get().unwrap(), Some("rt1".into()));
+    assert_eq!(*secrets.sets.lock().unwrap(), 2);
+    assert_eq!(*secrets.deletes.lock().unwrap(), 1);
+}
+
+#[tokio::test]
+async fn an_item_that_cannot_be_replaced_says_so_after_one_retry_and_not_as_google() {
+    let secrets = Arc::new(StaleSecrets {
+        stale: Mutex::new(true),
+        stubborn: true,
+        ..StaleSecrets::default()
+    });
+    let event = sign_in_over(secrets.clone()).await;
+    assert_eq!(
+        event.outcome,
+        Err(SyncFailure::Storage(
+            "The Keychain holds an older PaliCanon sign-in this build cannot replace. \
+             Sign out, then sign in again."
+                .into()
+        ))
+    );
+    assert_eq!(*secrets.sets.lock().unwrap(), 2);
+    assert_eq!(*secrets.deletes.lock().unwrap(), 1);
+}
+
+#[tokio::test]
+async fn another_keychain_refusal_is_not_retried_and_is_local_storage() {
+    let secrets = Arc::new(StaleSecrets {
+        broken: true,
+        ..StaleSecrets::default()
+    });
+    let event = sign_in_over(secrets.clone()).await;
+    assert_eq!(
+        event.outcome,
+        Err(SyncFailure::Storage("the Keychain is locked".into()))
+    );
+    assert_eq!(*secrets.sets.lock().unwrap(), 1);
+    assert_eq!(*secrets.deletes.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn an_unreadable_keychain_item_is_signed_out_with_no_request() {
+    let google = FakeGoogle::start().await;
+    let secrets = Arc::new(StaleSecrets {
+        unreadable: true,
+        ..StaleSecrets::default()
+    });
+    let service = SyncService::new(client(), Endpoints::at(&google.base), secrets);
+    assert_eq!(
+        service.pull().await,
+        PullAnswer::Failed(SyncFailure::SignedOut)
+    );
+    assert_eq!(google.seen_at("POST", TOKEN).len(), 0);
 }
 
 /// One plain HTTP GET, its whole answer as text.

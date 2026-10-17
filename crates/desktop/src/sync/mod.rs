@@ -24,7 +24,7 @@ pub mod service;
 use std::sync::Arc;
 
 pub use google::{Endpoints, OAuthClient};
-pub use keychain::{Keychain, MemorySecrets, Secrets};
+pub use keychain::{Keychain, MemorySecrets, SecretError, Secrets};
 pub use service::{PendingSignIn, SyncService};
 
 /// The Desktop OAuth client of project `palicanon-app`.

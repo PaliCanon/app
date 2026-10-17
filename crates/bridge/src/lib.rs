@@ -230,6 +230,9 @@ pub enum SyncFailure {
     Network,
     /// Google answered an error: what it said.
     Drive(String),
+    /// The machine's own storage (the Keychain) could not keep or replace
+    /// the sign-in: the reason. Not Google's doing.
+    Storage(String),
 }
 
 /// What `sync_account` answers.

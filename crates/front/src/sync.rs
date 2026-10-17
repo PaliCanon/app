@@ -53,7 +53,15 @@ pub fn error_of(failure: SyncFailure) -> SyncError {
         SyncFailure::Cancelled => SyncError::Cancelled,
         SyncFailure::Network => SyncError::Network,
         SyncFailure::Drive(message) => SyncError::Drive(message),
+        // learn-pali's `SyncError` has no local-storage reason yet: the
+        // reason line carries the whole sentence.
+        SyncFailure::Storage(why) => SyncError::Drive(storage_sentence(&why)),
     }
+}
+
+/// What the learner reads when the Keychain could not keep the sign-in.
+fn storage_sentence(why: &str) -> String {
+    format!("Could not store the sign-in in the Keychain: {why}")
 }
 
 /// The account `sync_account` answered; none when this build has no sync.
@@ -473,6 +481,10 @@ mod tests {
         assert_eq!(
             error_of(SyncFailure::Drive("x".into())),
             SyncError::Drive("x".into())
+        );
+        assert_eq!(
+            error_of(SyncFailure::Storage("locked".into())),
+            SyncError::Drive("Could not store the sign-in in the Keychain: locked".into())
         );
     }
 }

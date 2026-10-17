@@ -33,9 +33,13 @@ use reqwest::header::CONTENT_TYPE;
 use tokio::sync::oneshot;
 
 use super::google::{self, Endpoints, OAuthClient, Tokens, checked, send};
-use super::keychain::Secrets;
+use super::keychain::{SecretError, Secrets};
 use super::loopback::{Loopback, SIGN_IN_TIMEOUT, WaitError};
 use super::pkce::{AuthRequest, Proofs, auth_url};
+
+/// What the learner reads when the Keychain keeps an item this build
+/// cannot replace, even after a delete.
+const OLDER_SIGN_IN: &str = "The Keychain holds an older PaliCanon sign-in this build cannot replace. Sign out, then sign in again.";
 
 /// What the token is asked for: where the progress lives and `email`, to
 /// show the account (as the site).
@@ -201,10 +205,7 @@ impl SyncService {
             .refresh
             .clone()
             .ok_or_else(|| SyncFailure::Drive("Google gave no refresh token".into()))?;
-        self.0
-            .secrets
-            .set(&refresh)
-            .map_err(|why| SyncFailure::Drive(format!("Keychain: {why}")))?;
+        self.store(&refresh)?;
         self.keep(&tokens);
         self.session().file_id = None;
         let email = self.fetch_email(&tokens.access).await;
@@ -281,12 +282,16 @@ impl SyncService {
     /// A new access token from the Keychain's refresh token. A refused one
     /// is deleted: signed out.
     async fn refresh(&self) -> Result<String, SyncFailure> {
-        let refresh = self
-            .0
-            .secrets
-            .get()
-            .map_err(|why| SyncFailure::Drive(format!("Keychain: {why}")))?
-            .ok_or(SyncFailure::SignedOut)?;
+        let refresh = match self.0.secrets.get() {
+            Ok(Some(refresh)) => refresh,
+            Ok(None) => return Err(SyncFailure::SignedOut),
+            Err(why) => {
+                // An item this build may not read: signed out, so the
+                // learner can sign in again (the store replaces it).
+                log::warn!("sync: the Keychain could not be read: {why}");
+                return Err(SyncFailure::SignedOut);
+            }
+        };
         let body = google::form(&[
             ("grant_type", "refresh_token"),
             ("refresh_token", &refresh),
@@ -309,6 +314,29 @@ impl SyncService {
             self.session().email = email;
         }
         Ok(tokens.access)
+    }
+
+    /// Keeps the refresh token in the Keychain. An item another build left
+    /// (the duplicate) is deleted and the token set once more; a second
+    /// refusal is local storage's failure, never Google's.
+    fn store(&self, refresh: &str) -> Result<(), SyncFailure> {
+        let first = match self.0.secrets.set(refresh) {
+            Err(SecretError::Duplicate) => {
+                log::warn!("sync: the Keychain holds an older sign-in; replacing it");
+                if let Err(why) = self.0.secrets.delete() {
+                    log::warn!("sync: the older Keychain item could not be deleted: {why}");
+                }
+                self.0.secrets.set(refresh)
+            }
+            other => other,
+        };
+        first.map_err(|error| {
+            log::warn!("sync: the sign-in could not be stored: {error}");
+            SyncFailure::Storage(match error {
+                SecretError::Duplicate => OLDER_SIGN_IN.into(),
+                SecretError::Other(why) => why,
+            })
+        })
     }
 
     /// Deletes the refresh token and clears the memory.
