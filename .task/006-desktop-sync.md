@@ -12,3 +12,4 @@ learn-pali's fragment is consumed from the 050 branch commit until 050 is merged
 | --- | --- | --- |
 | Define | done | design learn-pali 050 v7 (app node), validated with the user's choices 2026-10-16; worktree /Users/lsh/projects/palicanon/wt/app006/app (feat/desktop-sync from feat/learn-search-yuga) |
 | Bump (lane) | partial | yuga-sidecar 0.5.2 pinned (1175705); `complete` accepted, test in tests/engine.rs. learn fragment-v0.3.0 + ui-lib v0.3.1 NOT bumped: search_front fragment-v0.1.0 and vizualisation v0.2.0 pin ui-lib tag v0.3.0, a bump builds two ui-lib (cargo tree -d shows 0.3.0 and 0.3.1); waits for a search-front and a vizualisation tag on v0.3.1 |
+| Fix (user check) | done | 7806d8a; red: `cargo test --locked -p palicanon-app-desktop --test sync` exit 101 (SecretError and SyncFailure::Storage unresolved); green: desktop tests exit 0 (33 unit, 20 sync), clippy -D warnings exit 0, fmt --check exit 0, front+bridge tests exit 0 |
