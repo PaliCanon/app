@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use palicanon_app_bridge::{SearchAnswer, SearchRequest, SearchStatus};
-use palicanon_app_desktop::engine::{Engine, Process, Spawn};
+use palicanon_app_desktop::engine::{Engine, Process, Spawn, answer_of};
 
 /// What the fake processes share with the test.
 #[derive(Default)]
@@ -212,4 +212,17 @@ fn shutdown_kills_the_process_and_nothing_starts_after() {
         SearchAnswer::Failed(_)
     ));
     assert_eq!(world.spawns.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn an_answer_with_the_complete_field_of_sidecar_0_5_2_is_still_hits() {
+    // yuga-sidecar 0.5.2 adds `complete` (the search covered every shard):
+    // the app reads the hits and ignores what it does not use.
+    let line = HITS.replacen("\"hits\":", "\"complete\":true,\"hits\":", 1);
+    assert!(line.contains("\"complete\":true"));
+    let SearchAnswer::Hits(hits) = answer_of(&line) else {
+        panic!("hits")
+    };
+    assert_eq!(hits.hits[0].sutta_uid, "mn22");
+    assert_eq!(hits.mode, "words");
 }

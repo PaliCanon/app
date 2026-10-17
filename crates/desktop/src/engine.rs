@@ -4,7 +4,7 @@
 //!
 //! - One request in flight at a time: one mutex over the process, one JSON
 //!   line out, one JSON line back (`yuga::sidecar`'s protocol).
-//! - Two-phase start (yuga-sidecar 0.5.1-2): words are served once the
+//! - Two-phase start (yuga-sidecar 0.5.2): words are served once the
 //!   store is open; the model loads in the background and `status` says
 //!   `loading: true` meanwhile. [`Engine::status`] asks again every
 //!   [`POLL`] (natively, the mutex released between asks) until loading is

@@ -42,14 +42,14 @@ pub struct Pinned {
     pub sha256: &'static str,
 }
 
-/// yuga-sidecar 0.5.1-2 (yuga d2688ac): words at once, the model in the
-/// background.
+/// yuga-sidecar 0.5.2: words at once, the model in the background; its
+/// answers add a `complete` field.
 pub const SIDECAR: Pinned = Pinned {
-    file: "yuga-sidecar-0.5.1-2-aarch64-apple-darwin.tar.gz",
+    file: "yuga-sidecar-0.5.2-aarch64-apple-darwin.tar.gz",
     source: Source::Https(
-        "https://github.com/anatta-rs/yuga-releases/releases/download/yuga-sidecar-v0.5.1-2/yuga-sidecar-0.5.1-2-aarch64-apple-darwin.tar.gz",
+        "https://github.com/anatta-rs/yuga-releases/releases/download/yuga-sidecar-v0.5.2/yuga-sidecar-0.5.2-aarch64-apple-darwin.tar.gz",
     ),
-    sha256: "e6158bdcf53b7074e95fa41facda8a7b96975c82c798a34c186a5e568dba0374",
+    sha256: "a0878f002970f55dd7065c0e70ef519f53989559bddc6965dcba696a42c62963",
 };
 
 /// The English store built with `BAAI/bge-m3` (2026-10-02, b).
@@ -492,10 +492,10 @@ mod tests {
     fn the_pins_are_the_released_files() {
         assert_eq!(
             SIDECAR.sha256,
-            "e6158bdcf53b7074e95fa41facda8a7b96975c82c798a34c186a5e568dba0374"
+            "a0878f002970f55dd7065c0e70ef519f53989559bddc6965dcba696a42c62963"
         );
         assert!(
-            matches!(SIDECAR.source, Source::Https(u) if u.ends_with(SIDECAR.file) && u.contains("/yuga-sidecar-v0.5.1-2/"))
+            matches!(SIDECAR.source, Source::Https(u) if u.ends_with(SIDECAR.file) && u.contains("/yuga-sidecar-v0.5.2/"))
         );
         assert!(matches!(STORE.source, Source::Gs(u) if u.ends_with(STORE.file)));
         let names: Vec<&str> = MODEL.iter().map(|(n, _, _)| *n).collect();
