@@ -7,8 +7,7 @@
 //!    shell; a path source would mean a sibling checkout);
 //!
 //!    `learn_core` and `learn_pali` (Learn and the progress format the
-//!    native writer reads) resolve to one revision, a tag's or an exact
-//!    `rev=` (learn-pali's sync before its tag, task 006);
+//!    native writer reads) resolve to one revision;
 //!
 //! 2. the resolved checkout directories of `palicanon-ui-lib`, of the map
 //!    crate and of the Learn and Search fragments, which the CSS, data and
@@ -200,17 +199,10 @@ pub fn read_with(metadata: &str, fragments: Fragments<'_>) -> Result<Pins, PinsE
         .transpose()
     };
     let map = pinned(fragments.map)?;
-    let learn = fragments
-        .learn
-        .map(|name| {
-            let (package, _) = built_once(&metadata, resolve, name)?;
-            check_learn_source(package)?;
-            Ok(package)
-        })
-        .transpose()?;
+    let learn = pinned(fragments.learn)?;
     if let Some(learn) = learn {
         let (core, _) = built_once(&metadata, resolve, LEARN_CORE)?;
-        check_learn_source(core)?;
+        check_source(core)?;
         if revision(core) != revision(learn) {
             return Err(PinsError::Apart(LEARN_CORE.into(), learn.name.clone()));
         }
@@ -285,28 +277,6 @@ fn check_source(package: &Package) -> Result<(), PinsError> {
     } else {
         Err(PinsError::NotTagged(package.name.clone(), source.clone()))
     }
-}
-
-/// Learn and its core are held to the tag rule, or pinned at one exact
-/// revision: `git+<url>?rev=<40 digits>#<the same 40 digits>` (the app takes
-/// learn-pali's unreleased sync from its branch's commit until it is tagged;
-/// task 006). A branch, a short or another revision is refused.
-fn check_learn_source(package: &Package) -> Result<(), PinsError> {
-    let exact = package
-        .source
-        .as_deref()
-        .and_then(|source| source.strip_prefix("git+"))
-        .and_then(|git| git.split_once('#'))
-        .is_some_and(|(address, rev)| {
-            rev.len() == 40
-                && rev.bytes().all(|b| b.is_ascii_hexdigit())
-                && address.split_once('?').is_some_and(|(_, query)| {
-                    query
-                        .split('&')
-                        .any(|part| part.strip_prefix("rev=") == Some(rev))
-                })
-        });
-    if exact { Ok(()) } else { check_source(package) }
 }
 
 /// `csr` on, `ssr` and `hydrate` off.
@@ -690,19 +660,12 @@ mod tests {
     }
 
     #[test]
-    fn learn_at_its_exact_full_revision_is_pinned() {
-        let v = with_learn_query(&format!("rev={REV_A}"));
-        let pins = read_with(&v, learn_only()).expect("an exact revision pins Learn");
-        assert_eq!(pins.learn, Some(PathBuf::from("/co/learn-pali/abc/app")));
-    }
-
-    #[test]
-    fn learn_at_a_branch_a_short_rev_or_another_rev_is_refused() {
+    fn learn_at_a_rev_a_branch_or_a_short_rev_is_not_a_tag() {
         for query in [
+            format!("rev={REV_A}"),
             "branch=feat/progress-sync".to_string(),
             format!("rev={}", &REV_A[..7]),
             format!("rev={REV_B}"),
-            "rev=".to_string(),
         ] {
             let v = with_learn_query(&query);
             assert!(
