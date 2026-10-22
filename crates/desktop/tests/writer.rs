@@ -383,7 +383,7 @@ fn exit_while_a_retry_waits_writes_the_latest_once() {
 #[test]
 fn a_newer_file_is_refused_nothing_written_and_the_event_carries_it() {
     let rig = Rig::new("newer");
-    let newer = r#"{"version": 2, "else": true}"#;
+    let newer = r#"{"version": 9, "else": true}"#;
     std::fs::write(rig.dir.join(PROGRESS_FILE), newer).unwrap();
     rig.writer.load();
     rig.writer.save(1, state(1)).unwrap();

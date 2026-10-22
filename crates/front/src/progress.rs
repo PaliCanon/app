@@ -301,7 +301,7 @@ mod tests {
             }));
             store.save(&state(1));
             store.save(&state(2));
-            let raw = r#"{"version": 2}"#.to_string();
+            let raw = r#"{"version": 9}"#.to_string();
             store.apply(StatusEvent::NewerVersion {
                 seq: 1,
                 raw: raw.clone(),

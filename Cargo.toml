@@ -18,21 +18,21 @@ serde_json = "1"
 # new ui-lib by a bump commit; never a path or a [patch]). `cargo xtask pins`
 # checks that exactly one revision of it is built, with `csr` and without
 # `ssr` or `hydrate`.
-palicanon-ui-lib = { git = "ssh://git@github.com/PaliCanon/ui-lib.git", tag = "v0.3.0", version = "0.3.0", default-features = false, features = ["csr"] }
+palicanon-ui-lib = { git = "ssh://git@github.com/PaliCanon/ui-lib.git", tag = "v0.3.1", version = "0.3.1", default-features = false, features = ["csr"] }
 
 # The map (vizualisation 012's fragment), by tag, client side only: `csr` turns
 # on ui-lib's `csr` in it, so the app builds one ui-lib. Its package lives in the
 # repository's `app/` directory; its data files are the repository's `public/`.
-vizualisation = { git = "ssh://git@github.com/PaliCanon/vizualisation.git", tag = "v0.2.0", version = "0.1.0", default-features = false, features = ["csr"] }
+vizualisation = { git = "ssh://git@github.com/PaliCanon/vizualisation.git", tag = "v0.2.1", version = "0.1.0", default-features = false, features = ["csr"] }
 # Learn (learn-pali 048's fragment, with 050's sync: the SyncTransport seam)
 # and its progress format, by one tag, client side only: `csr` turns on
 # ui-lib's `csr`, no web store.
-learn_pali = { git = "ssh://git@github.com/PaliCanon/learn-pali.git", tag = "fragment-v0.2.0", version = "0.1.0", default-features = false, features = ["csr"] }
-learn_core = { git = "ssh://git@github.com/PaliCanon/learn-pali.git", tag = "fragment-v0.2.0", version = "0.1.0" }
+learn_pali = { git = "ssh://git@github.com/PaliCanon/learn-pali.git", tag = "fragment-v0.3.0", version = "0.1.0", default-features = false, features = ["csr"] }
+learn_core = { git = "ssh://git@github.com/PaliCanon/learn-pali.git", tag = "fragment-v0.3.0", version = "0.1.0" }
 # Search (search-front 021's fragment), by tag, client side only.
-search_front = { git = "ssh://git@github.com/PaliCanon/search-front.git", tag = "fragment-v0.1.0", version = "0.1.0", default-features = false, features = ["csr"] }
+search_front = { git = "ssh://git@github.com/PaliCanon/search-front.git", tag = "fragment-v0.1.1", version = "0.1.0", default-features = false, features = ["csr"] }
 # The engine's live-view count, for the browser test (same tag, same checkout).
-map-engine = { git = "ssh://git@github.com/PaliCanon/vizualisation.git", tag = "v0.2.0", version = "0.1.0" }
+map-engine = { git = "ssh://git@github.com/PaliCanon/vizualisation.git", tag = "v0.2.1", version = "0.1.0" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
