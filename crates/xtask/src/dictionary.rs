@@ -23,11 +23,11 @@ pub const FORMS: Pinned = Pinned {
     sha256: "768bdab1f718312fe67b54f935c3763b30657b7888d6fa6c4bbaf97de8c008f4",
 };
 
-/// The passages asset: learn-pali 068, built on 2026-10-23.
+/// The passages asset: learn-pali 068, built on 2026-10-24 (schema 1).
 pub const PASSAGES: Pinned = Pinned {
     file: "passages.db",
-    source: Source::Gs("gs://palicanon-app-assets/passages/passages-2026-10-23.db"),
-    sha256: "8ea02066e449cd2ee3f1e8840cf6b1fef98af97d98ed7b591c41ed438bc6790e",
+    source: Source::Gs("gs://palicanon-app-assets/passages/passages-2026-10-24.db"),
+    sha256: "6eda1cb001940f6958d23891db56a09638acb444f2d59f1b590eb15877502547",
 };
 
 /// Fetches the three assets into `out` (checked by digest, a cached copy

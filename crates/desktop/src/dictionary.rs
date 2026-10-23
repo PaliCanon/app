@@ -25,6 +25,8 @@ pub const FORMS_FILE: &str = "dpd.db";
 pub const PASSAGES_FILE: &str = "passages.db";
 /// How many entries a search answers at most (the API's default).
 pub const SEARCH_LIMIT: usize = 20;
+/// The passages schema this reader knows (`build-deck passages`, learn-pali 068).
+pub const PASSAGES_SCHEMA: &str = "1";
 
 /// The three assets, opened read-only the first time each is asked.
 pub struct Dictionary {
@@ -90,9 +92,12 @@ impl Dictionary {
         .map_or(WordsAnswer::Unavailable, WordsAnswer::Entries)
     }
 
-    /// The precomputed line for `lemma`.
+    /// The precomputed line for `lemma`; an asset of another schema, or one
+    /// not complete, answers Unavailable (the builder writes `schema` and
+    /// `complete` in `info`).
     pub fn passage(&self, lemma: &str) -> PassageAnswer {
         self.with(&self.passages, PASSAGES_FILE, |conn| {
+            check_passages(conn)?;
             passage_row(conn, lemma)
         })
         .unwrap_or(PassageAnswer::Unavailable)
@@ -152,6 +157,21 @@ fn search_entries(conn: &Connection, prefix: &str, n: usize) -> rusqlite::Result
         })
     })?;
     rows.collect()
+}
+
+/// The asset's `info` must say this schema and `complete`.
+fn check_passages(conn: &Connection) -> rusqlite::Result<()> {
+    let info = |key: &str| -> rusqlite::Result<Option<String>> {
+        conn.query_row("SELECT value FROM info WHERE key = ?1", [key], |r| r.get(0))
+            .optional()
+    };
+    if info("schema")?.as_deref() == Some(PASSAGES_SCHEMA)
+        && info("complete")?.as_deref() == Some("true")
+    {
+        Ok(())
+    } else {
+        Err(rusqlite::Error::InvalidQuery)
+    }
 }
 
 fn passage_row(conn: &Connection, lemma: &str) -> rusqlite::Result<PassageAnswer> {
@@ -257,6 +277,9 @@ pub fn write_fixtures(dir: &Path) {
     passages
         .execute_batch(
             "CREATE TABLE passages (lemma TEXT PRIMARY KEY, text TEXT NOT NULL, source TEXT NOT NULL, sutta TEXT NOT NULL, blank_before TEXT, blank_answer TEXT, blank_after TEXT, en_text TEXT, en_translator TEXT, fr_text TEXT, fr_translator TEXT, vi_text TEXT, vi_translator TEXT, miss TEXT);
+             CREATE TABLE info (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+             INSERT INTO info VALUES ('schema', '1');
+             INSERT INTO info VALUES ('complete', 'true');
              INSERT INTO passages VALUES ('dhamma 1.01', 'natthi idha dhammo', 'SN22.87', 'Vakkalisutta', 'natthi idha ', 'dhammo', '', 'There is no nature here.', 'sujato', NULL, NULL, NULL, NULL, NULL);
              INSERT INTO passages VALUES ('vakkali', 'alaṃ vakkali', 'SN22.87', 'Vakkalisutta', 'alaṃ ', 'vakkali', '', NULL, NULL, NULL, NULL, NULL, NULL, 'not_matched');",
         )
@@ -334,6 +357,20 @@ mod tests {
         let none = Dictionary::new(std::env::temp_dir().join("pc-dictionary-nowhere"));
         assert_eq!(none.search("dha"), WordsAnswer::Unavailable);
         assert_eq!(none.lookup("dhammaṃ"), SensesAnswer::Unavailable);
+    }
+
+    #[test]
+    fn a_passages_asset_of_another_schema_or_not_complete_is_unavailable() {
+        let d = fixture("schema");
+        let conn = Connection::open(d.dir.join(PASSAGES_FILE)).unwrap();
+        conn.execute("UPDATE info SET value = '2' WHERE key = 'schema'", [])
+            .unwrap();
+        assert_eq!(d.passage("dhamma 1.01"), PassageAnswer::Unavailable);
+        let d = fixture("partial");
+        let conn = Connection::open(d.dir.join(PASSAGES_FILE)).unwrap();
+        conn.execute("DELETE FROM info WHERE key = 'complete'", [])
+            .unwrap();
+        assert_eq!(d.passage("dhamma 1.01"), PassageAnswer::Unavailable);
     }
 
     #[test]
