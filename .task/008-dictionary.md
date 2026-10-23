@@ -1,7 +1,7 @@
 # 008 The dictionary offline in the desktop app
 
 status: building · rank: 5 · level: standard · type: feature · request: learn-pali 068 (user, 2026-10-23: «dico pas dans l'app ?» … «on a pas besoin de taper l'API, on a déjà tout en local non ?» … «Lance dictionnaire et app.») · after: [006]
-session: learn-pali-068-passages-and-dictionary-port (the request's session; this task's log is its `process` thread)
+session: learn-pali-068-passages-and-dictionary-port (archived 2026-10-24 with 068; what follows logs in the app's lasting session)
 worktree: /Users/lsh/projects/palicanon/wt/app008/app (branch `feat/dictionary`, from `feat/desktop-sync`)
 
 ## Summary
@@ -25,6 +25,7 @@ Viewer: learn-pali-068-passages-and-dictionary-port/design (the `port` subgraph,
 | Define | ✓ | the design's app node; this file |
 | Build | ✓ | a3bc639 bridge types and constants, xtask `dictionary` (3 tests), desktop `dictionary.rs` (6 tests) and commands, capability (fifteen), front `dictionary.rs` (4 tests) and `TauriDictionary`, `App dictionary=`; ab30c6c the reader checks the asset's schema and completeness (068 review); 30232da pins on `fragment-v0.5.0` (068 merged 966db20), local patch dropped |
 | Verify | ✓ | on 30232da: workspace clippy -D warnings, doc, tests (bridge, xtask incl. pins, desktop lib + acl/config/commands, front); `xtask dictionary` staged dictionary.db 23 MB, dpd.db 11 MB, passages.db 30 MB from the local cache (sha checked) |
-| Bundle | doing | `cargo tauri build --bundles app --config tauri.bundle.conf.json` |
+| Bundle | ✓ | `cargo tauri build --bundles app --config tauri.bundle.conf.json` on 30232da: PaliCanon.app 727 MB, `Resources/dictionary/` holds the three assets; opened for the user 2026-10-24 (the 006 bundle I had opened was quit first) |
+| Check | doing | the user: Learn → Add a word → entries offline; a word tapped in a line → its senses; an added word's line |
 
 ## Retro
