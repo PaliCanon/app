@@ -14,7 +14,7 @@ The app showed `Unreachable` on Learn's search: the dictionary lived behind the 
 - The capability grants the three commands (fifteen now); the bridge's `COMMANDS` lists them for tauri-build.
 
 Ruled out: calling the API from the app (no token in a client, security.md); shipping the raw corpora (169 MB) for live passages.
-Open: the fragment pin — built against the 068 worktree through a local `[patch]` until 068 is merged and tagged `fragment-v0.5.0`; the pin then moves to the tag and the patch goes.
+Open: nothing on the pin (moved to `fragment-v0.5.0` once 068 merged). The app grows by ≈ 64 MB of dictionary assets.
 
 ## Design
 Viewer: learn-pali-068-passages-and-dictionary-port/design (the `port` subgraph, `app` node), validated by the user's order 2026-10-23.
@@ -23,6 +23,8 @@ Viewer: learn-pali-068-passages-and-dictionary-port/design (the `port` subgraph,
 | Step | Result | Output |
 | --- | --- | --- |
 | Define | ✓ | the design's app node; this file |
-| Build | doing | bridge types and constants, xtask `dictionary` (3 tests), desktop `dictionary.rs` (5 tests) and commands, capability, front `dictionary.rs` (4 tests) and `TauriDictionary`, `App dictionary=` |
+| Build | ✓ | a3bc639 bridge types and constants, xtask `dictionary` (3 tests), desktop `dictionary.rs` (6 tests) and commands, capability (fifteen), front `dictionary.rs` (4 tests) and `TauriDictionary`, `App dictionary=`; ab30c6c the reader checks the asset's schema and completeness (068 review); 30232da pins on `fragment-v0.5.0` (068 merged 966db20), local patch dropped |
+| Verify | ✓ | on 30232da: workspace clippy -D warnings, doc, tests (bridge, xtask incl. pins, desktop lib + acl/config/commands, front); `xtask dictionary` staged dictionary.db 23 MB, dpd.db 11 MB, passages.db 30 MB from the local cache (sha checked) |
+| Bundle | doing | `cargo tauri build --bundles app --config tauri.bundle.conf.json` |
 
 ## Retro
