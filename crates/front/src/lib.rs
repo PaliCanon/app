@@ -18,6 +18,7 @@
 
 pub mod app;
 pub mod data;
+pub mod dictionary;
 pub mod files;
 pub mod learn_mount;
 pub mod map_mount;

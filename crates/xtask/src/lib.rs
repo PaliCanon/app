@@ -11,8 +11,18 @@ use std::path::{Path, PathBuf};
 pub mod assets;
 pub mod css;
 pub mod data;
+pub mod dictionary;
 pub mod pins;
 pub mod yuga;
+
+/// `xtask dictionary`: the three dictionary assets into `target/dictionary/`
+/// (task 008), a cached copy taken from `XTASK_YUGA_CACHE` when it matches.
+fn stage_dictionary(root: &Path) -> Result<String, Box<dyn Error>> {
+    let out = root.join("target/dictionary");
+    let cache = std::env::var_os("XTASK_YUGA_CACHE").map(PathBuf::from);
+    let dir = dictionary::stage(&out, cache.as_deref(), &dictionary::assets(), &yuga::Tools)?;
+    Ok(format!("xtask dictionary: {}", dir.display()))
+}
 
 /// Runs the task `task` over `pins` and returns the line it reports.
 /// `tailwind` finds the Tailwind CLI, only asked by `css`. `root` is the
@@ -51,6 +61,7 @@ pub fn run(
             let n = assets::stage(pins.learn.as_deref(), pins.search.as_deref(), &out)?;
             Ok(format!("xtask assets: {n} files in {}", out.display()))
         }
+        "dictionary" => stage_dictionary(root),
         "yuga" => {
             let out = root.join("target/yuga");
             let cache = std::env::var_os("XTASK_YUGA_CACHE").map(PathBuf::from);
@@ -74,7 +85,9 @@ pub fn run(
                 staged.model.display()
             ))
         }
-        other => Err(format!("unknown task {other:?} (pins, css, data, assets, yuga)").into()),
+        other => Err(
+            format!("unknown task {other:?} (pins, css, data, assets, yuga, dictionary)").into(),
+        ),
     }
 }
 

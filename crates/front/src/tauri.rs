@@ -8,11 +8,12 @@
 use std::rc::Rc;
 
 use palicanon_app_bridge::{
-    EXPORT_FILE, ExportArgs, IMPORT_FILE, ImportAnswer, LoadAnswer, PROGRESS_LOAD, PROGRESS_SAVE,
-    PROGRESS_STATUS_EVENT, PullAnswer, PushAnswer, PushArgs, SEARCH, SEARCH_STATUS, SYNC_ACCOUNT,
-    SYNC_CANCEL, SYNC_PULL, SYNC_PUSH, SYNC_SIGN_IN, SYNC_SIGN_IN_EVENT, SYNC_SIGN_OUT, SaveArgs,
-    SearchAnswer, SearchRequest, SearchStatus, SignInEvent, SignInStart, StatusEvent,
-    SyncAccountAnswer, SyncFailure,
+    DICTIONARY_LOOKUP, DICTIONARY_PASSAGE, DICTIONARY_SEARCH, EXPORT_FILE, ExportArgs, IMPORT_FILE,
+    ImportAnswer, LoadAnswer, PROGRESS_LOAD, PROGRESS_SAVE, PROGRESS_STATUS_EVENT, PassageAnswer,
+    PullAnswer, PushAnswer, PushArgs, SEARCH, SEARCH_STATUS, SYNC_ACCOUNT, SYNC_CANCEL, SYNC_PULL,
+    SYNC_PUSH, SYNC_SIGN_IN, SYNC_SIGN_IN_EVENT, SYNC_SIGN_OUT, SaveArgs, SearchAnswer,
+    SearchRequest, SearchStatus, SensesAnswer, SignInEvent, SignInStart, StatusEvent,
+    SyncAccountAnswer, SyncFailure, WordsAnswer,
 };
 use send_wrapper::SendWrapper;
 use serde::Serialize;
@@ -20,6 +21,7 @@ use serde::de::DeserializeOwned;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
+use crate::dictionary::DictionaryPort;
 use crate::files::FilesPort;
 use crate::progress::{AppStore, ProgressPort};
 use crate::search::{PortFuture, SearchPort};
@@ -245,5 +247,52 @@ impl SearchPort for TauriSearch {
         Box::pin(SendWrapper::new(async move {
             invoke(SEARCH_STATUS, &NoArgs {}).await
         }))
+    }
+}
+
+/// The desktop's dictionary commands (task 008), each answered once.
+pub struct TauriDictionary;
+
+#[derive(Serialize)]
+struct QueryArgs {
+    q: String,
+}
+
+#[derive(Serialize)]
+struct LemmaArgs {
+    lemma: String,
+}
+
+#[derive(Serialize)]
+struct FormArgs {
+    form: String,
+}
+
+/// Invokes `cmd` and hands its answer, or the failure's text, to `done`.
+fn ask<T: DeserializeOwned + 'static>(
+    cmd: &'static str,
+    args: impl Serialize + 'static,
+    done: Box<dyn FnOnce(Result<T, String>)>,
+) {
+    wasm_bindgen_futures::spawn_local(async move {
+        let answer = invoke::<T>(cmd, &args).await;
+        if let Err(e) = &answer {
+            web_sys::console::warn_1(&format!("{cmd}: {e}").into());
+        }
+        done(answer);
+    });
+}
+
+impl DictionaryPort for TauriDictionary {
+    fn search(&self, q: String, done: Box<dyn FnOnce(Result<WordsAnswer, String>)>) {
+        ask(DICTIONARY_SEARCH, QueryArgs { q }, done);
+    }
+
+    fn passage(&self, lemma: String, done: Box<dyn FnOnce(Result<PassageAnswer, String>)>) {
+        ask(DICTIONARY_PASSAGE, LemmaArgs { lemma }, done);
+    }
+
+    fn lookup(&self, form: String, done: Box<dyn FnOnce(Result<SensesAnswer, String>)>) {
+        ask(DICTIONARY_LOOKUP, FormArgs { form }, done);
     }
 }

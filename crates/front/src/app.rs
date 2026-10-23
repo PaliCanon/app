@@ -10,7 +10,11 @@ use palicanon_ui_lib::{AppShell, Footer, NavList, language_signal, provide_langu
 use std::rc::Rc;
 use std::sync::Arc;
 
-use learn_pali::fragment::{LearnProvider, LearnSettings, SharedFiles, SharedStore, SharedSync};
+use learn_pali::fragment::{
+    LearnProvider, LearnSettings, SharedDictionary, SharedFiles, SharedStore, SharedSync,
+};
+
+use crate::dictionary::AppDictionary;
 use vizualisation::fragment::MapData;
 
 use crate::data::{BrowserFetch, BundledData};
@@ -35,13 +39,17 @@ pub fn App(
     files: AppFiles,
     /// Search over the local engine.
     search: AppSearch,
+    /// Learn's dictionary, over the desktop's assets (task 008).
+    dictionary: AppDictionary,
     /// The sync through the learner's Google Drive; none: no sync UI (a
     /// build without the OAuth secret).
     #[prop(optional_no_strip)]
     sync: Option<AppSync>,
 ) -> impl IntoView {
     let data: Arc<dyn MapData> = Arc::new(BundledData::<BrowserFetch>::default());
-    view! { <AppWith data=data store=store files=files search=search sync=sync /> }
+    view! {
+        <AppWith data=data store=store files=files search=search dictionary=dictionary sync=sync />
+    }
 }
 
 /// The app over given sources (the browser test gives fakes): the language
@@ -58,6 +66,8 @@ pub fn AppWith(
     files: AppFiles,
     /// What answers the searches.
     search: AppSearch,
+    /// Learn's dictionary, over the desktop's assets (task 008).
+    dictionary: AppDictionary,
     /// The sync; none: no sync UI.
     #[prop(optional_no_strip)]
     sync: Option<AppSync>,
@@ -68,11 +78,12 @@ pub fn AppWith(
     let store: SharedStore = Rc::new(store);
     let files: SharedFiles = Rc::new(files);
     let transport = sync.clone().map(|sync| Rc::new(sync) as SharedSync);
+    let words: SharedDictionary = Rc::new(dictionary);
     // Beside the provider, not in its children (they must be `Send`; the
     // sync holds an `Rc`).
     let link = sync.map(|sync| view! { <SignInLink sync=sync /> });
     view! {
-        <LearnProvider store=store files=files sync=transport>
+        <LearnProvider store=store files=files sync=transport dictionary=Some(words)>
             <Router>
                 <Shell>
                     <AppRoutes />

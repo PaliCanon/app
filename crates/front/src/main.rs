@@ -17,6 +17,7 @@ fn main() {
 async fn start() {
     use leptos::prelude::*;
     use palicanon_app_front::app::App;
+    use palicanon_app_front::dictionary::AppDictionary;
     use palicanon_app_front::files::AppFiles;
     use palicanon_app_front::progress::AppStore;
     use palicanon_app_front::search::AppSearch;
@@ -29,6 +30,7 @@ async fn start() {
     tauri::listen_progress(store.clone());
     let files = AppFiles::new(files);
     let search = AppSearch::new(std::sync::Arc::new(tauri::TauriSearch));
+    let dictionary = AppDictionary::new(std::rc::Rc::new(tauri::TauriDictionary));
     let sync = AppSync::new(
         tauri::sync_account().await,
         std::rc::Rc::new(tauri::TauriSync),
@@ -37,6 +39,8 @@ async fn start() {
         tauri::listen_sync(sync.clone());
     }
     palicanon_ui_lib::csr::mount(move || {
-        view! { <App store=store files=files search=search sync=sync.clone() /> }
+        view! {
+            <App store=store files=files search=search dictionary=dictionary sync=sync.clone() />
+        }
     });
 }

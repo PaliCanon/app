@@ -8,6 +8,7 @@
 //! the system browser.
 
 pub mod commands;
+pub mod dictionary;
 pub mod disk;
 pub mod engine;
 pub mod files;
@@ -160,6 +161,13 @@ fn progress_writer<R: Runtime>(app: &AppHandle<R>, dir: PathBuf) -> Writer {
 /// the model in the bundle's resources (`yuga/store`, `yuga/model`), read
 /// only. Nothing starts until the first search or status; a missing file
 /// makes the start fail, and Search answers `Failed`.
+/// The dictionary over the bundle's `Resources/dictionary/` (task 008); a
+/// test runtime with no resources answers Unavailable.
+fn dictionary_of<R: Runtime>(app: &AppHandle<R>) -> std::sync::Arc<dictionary::Dictionary> {
+    let resources = app.path().resource_dir().unwrap_or_default();
+    std::sync::Arc::new(dictionary::Dictionary::new(resources.join("dictionary")))
+}
+
 fn search_engine<R: Runtime>(app: &AppHandle<R>) -> engine::Engine {
     let resources = app.path().resource_dir().unwrap_or_default();
     let binary = std::env::current_exe()
@@ -226,6 +234,9 @@ pub fn configure<R: Runtime>(
             commands::sync_push,
             commands::sync_account,
             commands::sync_sign_out,
+            commands::dictionary_search,
+            commands::dictionary_passage,
+            commands::dictionary_lookup,
         ])
         .setup(move |app| {
             let dir = match data {
@@ -236,6 +247,7 @@ pub fn configure<R: Runtime>(
             writer.spawn();
             app.manage(writer);
             app.manage(search_engine(app.handle()));
+            app.manage(dictionary_of(app.handle()));
             app.manage(sync_host(app.handle(), sync));
             create_window(app.handle())?;
             Ok(())

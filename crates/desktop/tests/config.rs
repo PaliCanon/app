@@ -1,5 +1,5 @@
 //! The Tauri configuration, read as data: the fixed identity, the window, the
-//! CSP, the bundle, and the webview's one capability (the twelve commands).
+//! CSP, the bundle, and the webview's one capability (the fifteen commands).
 
 use std::path::Path;
 
@@ -105,12 +105,12 @@ fn the_bundle_is_the_app_only() {
 }
 
 /// The webview's one capability, on the main window only: the bridge's
-/// twelve commands and the listen of events (the `progress-status` event), nothing
+/// fifteen commands and the listen of events (the `progress-status` event), nothing
 /// else (no opener, dialog, fs or other core permission). The app manifest
-/// (`build.rs`) declares exactly the twelve, so any other app command would be
+/// (`build.rs`) declares exactly the fifteen, so any other app command would be
 /// refused too. No global `window.__TAURI__`.
 #[test]
-fn the_capability_is_the_twelve_commands_and_event_listen() {
+fn the_capability_is_the_fifteen_commands_and_event_listen() {
     let dir = manifest_dir().join("capabilities");
     let files: Vec<_> = std::fs::read_dir(&dir)
         .expect("capabilities/")
@@ -182,7 +182,8 @@ fn the_commands_are_the_bridges_and_registered_once() {
 /// tauri.bundle.conf.json`): the sidecar as Tauri's `externalBin` (Tauri adds
 /// the target triple to the name, `xtask yuga` stages it so) and the store,
 /// the model and the sidecar's licence as read-only resources, all staged by
-/// `xtask yuga`, which runs before the front's build. Kept apart from
+/// `xtask yuga`, and the three dictionary assets staged by `xtask dictionary`
+/// (task 008), both run before the front's build. Kept apart from
 /// `tauri.conf.json` so `cargo build` and `cargo test` need none of the
 /// 650 MB.
 #[test]
@@ -200,13 +201,14 @@ fn the_bundle_carries_the_sidecar_the_store_and_the_model() {
             "../../target/yuga/store/": "yuga/store/",
             "../../target/yuga/model/": "yuga/model/",
             "../../target/yuga/licence/": "yuga/licence/",
+            "../../target/dictionary/": "dictionary/",
         })
     );
     let before = bundle["build"]["beforeBuildCommand"]["script"]
         .as_str()
         .unwrap_or_default();
     assert!(
-        before.starts_with("cargo xtask yuga && trunk build --release"),
+        before.starts_with("cargo xtask yuga && cargo xtask dictionary && trunk build --release"),
         "{before}"
     );
     assert!(config()["bundle"].get("externalBin").is_none());

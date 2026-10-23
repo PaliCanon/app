@@ -44,7 +44,7 @@ pub const SYNC_SIGN_OUT: &str = "sync_sign_out";
 
 /// Every command the webview may call, and nothing else (the capability
 /// grants exactly these).
-pub const COMMANDS: [&str; 12] = [
+pub const COMMANDS: [&str; 15] = [
     PROGRESS_LOAD,
     PROGRESS_SAVE,
     EXPORT_FILE,
@@ -57,6 +57,9 @@ pub const COMMANDS: [&str; 12] = [
     SYNC_PUSH,
     SYNC_ACCOUNT,
     SYNC_SIGN_OUT,
+    DICTIONARY_SEARCH,
+    DICTIONARY_PASSAGE,
+    DICTIONARY_LOOKUP,
 ];
 
 /// The event the shell emits when a sign-in ends (signed in, cancelled,
@@ -313,7 +316,7 @@ mod tests {
     }
 
     #[test]
-    fn the_twelve_commands_are_the_designs() {
+    fn the_fifteen_commands_are_the_designs() {
         assert_eq!(
             COMMANDS,
             [
@@ -329,6 +332,9 @@ mod tests {
                 "sync_push",
                 "sync_account",
                 "sync_sign_out",
+                "dictionary_search",
+                "dictionary_passage",
+                "dictionary_lookup",
             ]
         );
         assert_eq!(PROGRESS_STATUS_EVENT, "progress-status");
@@ -495,4 +501,124 @@ mod tests {
             serde_json::json!({"text": "{}"})
         );
     }
+}
+
+/// `dictionary_search(q)`: the dictionary entries whose headword starts
+/// with `q` (task app 008: the dictionary offline).
+pub const DICTIONARY_SEARCH: &str = "dictionary_search";
+/// `dictionary_passage(lemma)`: a lemma's line from the suttas, precomputed.
+pub const DICTIONARY_PASSAGE: &str = "dictionary_passage";
+/// `dictionary_lookup(form)`: the senses of a word as written.
+pub const DICTIONARY_LOOKUP: &str = "dictionary_lookup";
+
+/// One dictionary entry, as the dictionary asset holds it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WordEntry {
+    /// The bare word.
+    pub headword: String,
+    /// The DPD lemma with its homonym number: the entry's key.
+    pub lemma: String,
+    /// The part of speech.
+    pub pos: String,
+    /// The meaning, in English.
+    pub meaning: String,
+    /// The meaning in French, when the DPD has one.
+    #[serde(default)]
+    pub meaning_fr: Option<String>,
+    /// The DPD's example, when it has one.
+    #[serde(default)]
+    pub example: Option<String>,
+    /// The example's source (`SN22.87`).
+    #[serde(default)]
+    pub source: Option<String>,
+    /// The example's sutta name.
+    #[serde(default)]
+    pub sutta: Option<String>,
+}
+
+/// `dictionary_search`'s answer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WordsAnswer {
+    /// The entries, best first (exact headword, then frequency).
+    Entries(Vec<WordEntry>),
+    /// The dictionary asset is not at hand (not shipped, or unreadable).
+    Unavailable,
+}
+
+/// A line in one language, with its translator.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PassageLine {
+    /// The line.
+    pub text: String,
+    /// Its translator (`sujato`).
+    pub translator: String,
+}
+
+/// The blank the deck asks: the line around the marked word.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PassageBlank {
+    /// What comes before the word.
+    pub before: String,
+    /// The word.
+    pub answer: String,
+    /// What comes after.
+    pub after: String,
+}
+
+/// A lemma's line from the suttas.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Passage {
+    /// The Pāli line, the DPD's markup stripped.
+    pub text: String,
+    /// Its source (`SN22.87`).
+    pub source: String,
+    /// The sutta's name.
+    pub sutta: String,
+    /// The blank, when the marked word was found in the line.
+    #[serde(default)]
+    pub blank: Option<PassageBlank>,
+    /// The English line.
+    #[serde(default)]
+    pub en: Option<PassageLine>,
+    /// The French line.
+    #[serde(default)]
+    pub fr: Option<PassageLine>,
+    /// The Vietnamese line.
+    #[serde(default)]
+    pub vi: Option<PassageLine>,
+}
+
+/// `dictionary_passage`'s answer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PassageAnswer {
+    /// The line, with at least its Pāli (boxed: the miss is a short name).
+    Found(Box<Passage>),
+    /// No line for this lemma: the reason's name (`no_example`,
+    /// `unmapped_source`, `text_not_served`, `not_matched`).
+    Miss(String),
+    /// The passages asset is not at hand.
+    Unavailable,
+}
+
+/// One sense of a word as written.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WordSense {
+    /// The DPD lemma.
+    pub lemma: String,
+    /// The part of speech.
+    pub pos: String,
+    /// The meaning in English.
+    pub en: String,
+    /// The meaning in French, when the DPD has one.
+    #[serde(default)]
+    pub fr: Option<String>,
+}
+
+/// `dictionary_lookup`'s answer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SensesAnswer {
+    /// The senses (none: an unknown form).
+    Senses(Vec<WordSense>),
+    /// The forms asset is not at hand.
+    Unavailable,
 }

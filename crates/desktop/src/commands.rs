@@ -9,13 +9,17 @@
 // Tauri hands a command its managed state by value (`State` is a borrow).
 #![allow(clippy::needless_pass_by_value)]
 
+use std::sync::Arc;
+
 use palicanon_app_bridge::{
-    ImportAnswer, LoadAnswer, PullAnswer, PushAnswer, SYNC_SIGN_IN_EVENT, SearchAnswer,
-    SearchRequest, SearchStatus, SignInStart, SyncAccountAnswer, SyncFailure,
+    ImportAnswer, LoadAnswer, PassageAnswer, PullAnswer, PushAnswer, SYNC_SIGN_IN_EVENT,
+    SearchAnswer, SearchRequest, SearchStatus, SensesAnswer, SignInStart, SyncAccountAnswer,
+    SyncFailure, WordsAnswer,
 };
 use tauri::{AppHandle, Emitter, Runtime, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
+use crate::dictionary::Dictionary;
 use crate::engine::Engine;
 use crate::files;
 use crate::sync::SyncHost;
@@ -232,4 +236,50 @@ pub async fn sync_sign_out(host: State<'_, SyncHost>) -> Result<(), String> {
         service.sign_out().await;
     }
     Ok(())
+}
+
+/// `dictionary_search(q)`: the dictionary entries whose headword starts
+/// with `q`, off the async runtime's threads (task 008).
+///
+/// # Errors
+/// The blocking task could not run.
+#[tauri::command]
+pub async fn dictionary_search(
+    dictionary: State<'_, Arc<Dictionary>>,
+    q: String,
+) -> Result<WordsAnswer, String> {
+    let dictionary = dictionary.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || dictionary.search(&q))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `dictionary_passage(lemma)`: the lemma's precomputed line.
+///
+/// # Errors
+/// The blocking task could not run.
+#[tauri::command]
+pub async fn dictionary_passage(
+    dictionary: State<'_, Arc<Dictionary>>,
+    lemma: String,
+) -> Result<PassageAnswer, String> {
+    let dictionary = dictionary.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || dictionary.passage(&lemma))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `dictionary_lookup(form)`: the senses of a word as written.
+///
+/// # Errors
+/// The blocking task could not run.
+#[tauri::command]
+pub async fn dictionary_lookup(
+    dictionary: State<'_, Arc<Dictionary>>,
+    form: String,
+) -> Result<SensesAnswer, String> {
+    let dictionary = dictionary.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || dictionary.lookup(&form))
+        .await
+        .map_err(|e| e.to_string())
 }

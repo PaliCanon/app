@@ -1,7 +1,7 @@
 //! The app's [`ProgressStore`]: a mirror of the native writer
 //! (`crates/desktop`'s `writer`), in the webview.
 //!
-//! - **Load<Book>**: built from what `progress_load` answered, BEFORE the app is
+//! - **`Load<Book>`**: built from what `progress_load` answered, BEFORE the app is
 //!   mounted: `Text(raw)` → `learn_pali::classify(raw)`, `Missing` → `Empty`,
 //!   `Unreadable(msg)` → `Load::Unreadable(msg)`, and `Load::Unreadable` too
 //!   when the call itself failed (the home shows its error and Reload).
