@@ -1,7 +1,7 @@
 //! The app's [`ProgressStore`]: a mirror of the native writer
 //! (`crates/desktop`'s `writer`), in the webview.
 //!
-//! - **Load**: built from what `progress_load` answered, BEFORE the app is
+//! - **Load<Book>**: built from what `progress_load` answered, BEFORE the app is
 //!   mounted: `Text(raw)` → `learn_pali::classify(raw)`, `Missing` → `Empty`,
 //!   `Unreadable(msg)` → `Load::Unreadable(msg)`, and `Load::Unreadable` too
 //!   when the call itself failed (the home shows its error and Reload).
@@ -26,7 +26,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use learn_core::progress::State;
+use learn_core::book::Book;
 use learn_pali::fragment::{Load, ProgressStore, SaveError, SaveStatus, classify};
 use leptos::prelude::*;
 use palicanon_app_bridge::{LoadAnswer, StatusEvent};
@@ -47,7 +47,7 @@ pub struct AppStore {
 }
 
 struct Inner {
-    memory: Load,
+    memory: Load<Book>,
     /// The latest save's number (0: none yet).
     taken: u64,
     /// The latest save is on disk.
@@ -58,7 +58,7 @@ struct Inner {
 }
 
 /// The memory `progress_load`'s answer (or its failure) gives.
-pub fn memory_of(answer: Result<LoadAnswer, String>) -> Load {
+pub fn memory_of(answer: Result<LoadAnswer, String>) -> Load<Book> {
     match answer {
         Ok(LoadAnswer::Text(raw)) => classify(Some(&raw)),
         Ok(LoadAnswer::Missing) => Load::Empty,
@@ -90,8 +90,8 @@ impl AppStore {
         }
         if let StatusEvent::NewerVersion { raw, .. } = event {
             let unsaved = match &inner.memory {
-                Load::Ok(state) => state.clone(),
-                _ => State::empty(),
+                Load::Ok(book) => book.clone(),
+                _ => Book::empty(),
             };
             inner.memory = classify(Some(&raw));
             inner.terminal = true;
@@ -127,11 +127,11 @@ impl AppStore {
 }
 
 impl ProgressStore for AppStore {
-    fn load(&self) -> Load {
+    fn load(&self) -> Load<Book> {
         self.inner.borrow().memory.clone()
     }
 
-    fn save(&self, state: &State) {
+    fn save(&self, book: &Book) {
         let mut inner = self.inner.borrow_mut();
         if inner.terminal
             || matches!(
@@ -141,13 +141,13 @@ impl ProgressStore for AppStore {
         {
             return;
         }
-        inner.memory = Load::Ok(state.clone());
+        inner.memory = Load::Ok(book.clone());
         inner.taken += 1;
         inner.saved = false;
         let seq = inner.taken;
         drop(inner);
         self.status.set(SaveStatus::Pending);
-        self.port.save(seq, state.to_json());
+        self.port.save(seq, book.to_json());
     }
 
     fn status(&self) -> Signal<SaveStatus> {
@@ -164,6 +164,7 @@ mod tests {
     use std::cell::{Cell, RefCell};
     use std::rc::Rc;
 
+    use learn_core::book::DeckId;
     use learn_core::date::Date;
     use learn_core::deck::TermId;
     use learn_core::progress::{Progress, State};
@@ -193,6 +194,14 @@ mod tests {
         state
     }
 
+    /// The Book holding `state(n)` as its words deck: what a flat text reads
+    /// as, and what the store saves (063a).
+    fn book(n: usize) -> Book {
+        let mut book = Book::empty();
+        book.set(DeckId::words(), state(n));
+        book
+    }
+
     fn store_over(answer: Result<LoadAnswer, String>) -> (AppStore, Rc<Sent>) {
         let sent = Rc::new(Sent::default());
         let port: Rc<dyn ProgressPort> = sent.clone();
@@ -206,7 +215,7 @@ mod tests {
     #[test]
     fn the_load_answer_gives_the_memory() {
         let valid = state(1).to_json();
-        assert_eq!(memory_of(Ok(LoadAnswer::Text(valid))), Load::Ok(state(1)));
+        assert_eq!(memory_of(Ok(LoadAnswer::Text(valid))), Load::Ok(book(1)));
         assert_eq!(
             memory_of(Ok(LoadAnswer::Text("{nope".into()))),
             Load::Invalid {
@@ -238,10 +247,10 @@ mod tests {
         Owner::new().with(|| {
             let (store, sent) = store_over(Ok(LoadAnswer::Missing));
             assert_eq!(status(&store), SaveStatus::Saved);
-            store.save(&state(1));
-            assert_eq!(store.load(), Load::Ok(state(1)));
+            store.save(&book(1));
+            assert_eq!(store.load(), Load::Ok(book(1)));
             assert_eq!(status(&store), SaveStatus::Pending);
-            store.save(&state(2));
+            store.save(&book(2));
             let seqs: Vec<u64> = sent.0.borrow().iter().map(|(s, _)| *s).collect();
             assert_eq!(seqs, [1, 2]);
             assert_eq!(sent.0.borrow()[1].1, state(2).to_json());
@@ -254,8 +263,8 @@ mod tests {
     fn an_old_saved_or_transient_delivered_late_changes_nothing() {
         Owner::new().with(|| {
             let (store, _) = store_over(Ok(LoadAnswer::Missing));
-            store.save(&state(1));
-            store.save(&state(2));
+            store.save(&book(1));
+            store.save(&book(2));
             store.apply(StatusEvent::Saved(1));
             assert_eq!(status(&store), SaveStatus::Pending);
             store.apply(StatusEvent::Transient(1));
@@ -277,7 +286,7 @@ mod tests {
     fn transient_is_failed_then_saved_when_a_later_write_lands() {
         Owner::new().with(|| {
             let (store, _) = store_over(Ok(LoadAnswer::Missing));
-            store.save(&state(1));
+            store.save(&book(1));
             store.apply(StatusEvent::Transient(1));
             assert_eq!(status(&store), SaveStatus::Failed(SaveError::Transient));
             store.apply(StatusEvent::Saved(1));
@@ -299,15 +308,15 @@ mod tests {
                 count.set(count.get() + 1);
                 *in_callback.borrow_mut() = Some((reader.load(), reader.status().get_untracked()));
             }));
-            store.save(&state(1));
-            store.save(&state(2));
+            store.save(&book(1));
+            store.save(&book(2));
             let raw = r#"{"version": 9}"#.to_string();
             store.apply(StatusEvent::NewerVersion {
                 seq: 1,
                 raw: raw.clone(),
             });
             assert_eq!(calls.get(), 1);
-            let expected_status = SaveStatus::Failed(SaveError::NewerVersion { unsaved: state(2) });
+            let expected_status = SaveStatus::Failed(SaveError::NewerVersion { unsaved: book(2) });
             assert_eq!(
                 seen.borrow().clone(),
                 Some((
@@ -325,7 +334,7 @@ mod tests {
             });
             assert_eq!(calls.get(), 1);
             // The guard: no save after it.
-            store.save(&state(3));
+            store.save(&book(3));
             assert_eq!(sent.0.borrow().len(), 2);
             assert_eq!(store.load(), Load::NewerVersion { raw });
         });
@@ -341,7 +350,7 @@ mod tests {
             ] {
                 let (store, sent) = store_over(answer);
                 let before = store.load();
-                store.save(&state(1));
+                store.save(&book(1));
                 assert_eq!(sent.0.borrow().len(), 0);
                 assert_eq!(store.load(), before);
                 assert_eq!(status(&store), SaveStatus::Saved);
@@ -355,7 +364,7 @@ mod tests {
     fn an_invalid_file_is_saved_over() {
         Owner::new().with(|| {
             let (store, sent) = store_over(Ok(LoadAnswer::Text("{nope".into())));
-            store.save(&state(1));
+            store.save(&book(1));
             assert_eq!(sent.0.borrow().len(), 1);
         });
     }
