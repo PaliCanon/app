@@ -40,8 +40,6 @@ async fn start() {
     }
     palicanon_app_front::links::install(tauri::open_outside);
     palicanon_ui_lib::csr::mount(move || {
-        view! {
-            <App store=store files=files search=search dictionary=dictionary sync=sync.clone() />
-        }
+        view! { <App store=store files=files search=search dictionary=dictionary sync=sync.clone() /> }
     });
 }

@@ -1,7 +1,8 @@
-# Lets cargo (and cargo-deny, which runs `cargo metadata`) fetch the private
-# git dependencies of this workspace over https: ui-lib, vizualisation (the
-# map), learn-pali (Learn) and search-front (Search; Cargo.toml pins each by
-# tag).
+# Lets cargo (and cargo-deny, which runs `cargo metadata`) fetch the git
+# dependencies of this workspace over https: ui-lib, vizualisation (the map),
+# learn-pali (Learn) and search-front (Search; Cargo.toml pins each by tag).
+# All four are public since 2026-10-16: without the App's secrets (this
+# repository has none) the ssh sources are pointed at plain https.
 #
 # The credential is the GitHub App `palicanon-ci` (Contents: read): the action
 # mints a one-hour token limited to the repositories below, revoked when the
@@ -13,16 +14,22 @@ name: Private git dependencies
 description: Mint a read-only token and point cargo's ssh git sources at it.
 inputs:
   app-id:
-    description: The GitHub App's id (a repository secret of the caller).
-    required: true
+    description: >-
+      The GitHub App's id (a repository secret of the caller). Empty when the
+      repository has none: the four dependencies are public since 2026-10-16,
+      and the ssh sources are then pointed at plain https.
+    required: false
+    default: ""
   private-key:
-    description: The GitHub App's private key (a repository secret of the caller).
-    required: true
+    description: The GitHub App's private key (a repository secret of the caller); empty with app-id.
+    required: false
+    default: ""
 runs:
   using: composite
   steps:
     - name: Mint a token for the private dependencies, Contents read
       id: app
+      if: inputs.app-id != ''
       uses: actions/create-github-app-token@v2
       with:
         app-id: ${{ inputs.app-id }}
@@ -39,5 +46,9 @@ runs:
       env:
         TOKEN: ${{ steps.app.outputs.token }}
       run: |
-        git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+        if [ -n "$TOKEN" ]; then
+          git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+        else
+          git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
+        fi
         echo "CARGO_NET_GIT_FETCH_WITH_CLI=true" >> "$GITHUB_ENV"
