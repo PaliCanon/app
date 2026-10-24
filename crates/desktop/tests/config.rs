@@ -1,5 +1,5 @@
 //! The Tauri configuration, read as data: the fixed identity, the window, the
-//! CSP, the bundle, and the webview's one capability (the fifteen commands).
+//! CSP, the bundle, and the webview's one capability (the sixteen commands).
 
 use std::path::Path;
 
@@ -105,12 +105,12 @@ fn the_bundle_is_the_app_only() {
 }
 
 /// The webview's one capability, on the main window only: the bridge's
-/// fifteen commands and the listen of events (the `progress-status` event), nothing
+/// sixteen commands and the listen of events (the `progress-status` event), nothing
 /// else (no opener, dialog, fs or other core permission). The app manifest
-/// (`build.rs`) declares exactly the fifteen, so any other app command would be
+/// (`build.rs`) declares exactly the sixteen, so any other app command would be
 /// refused too. No global `window.__TAURI__`.
 #[test]
-fn the_capability_is_the_fifteen_commands_and_event_listen() {
+fn the_capability_is_the_sixteen_commands_and_event_listen() {
     let dir = manifest_dir().join("capabilities");
     let files: Vec<_> = std::fs::read_dir(&dir)
         .expect("capabilities/")

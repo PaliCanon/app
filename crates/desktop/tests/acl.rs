@@ -1,4 +1,4 @@
-//! The webview's door is the fifteen commands (the six of the progress, the
+//! The webview's door is the sixteen commands (the six of the progress, the
 //! files and the search, the six of the sync) and event listen, nothing else.
 //! Two proofs.
 //!
@@ -34,9 +34,9 @@ fn request(cmd: &str, body: serde_json::Value) -> InvokeRequest {
 }
 
 /// What tauri-build generates from `capabilities/`: one capability, the
-/// fifteen commands and event listen.
+/// sixteen commands and event listen.
 #[test]
-fn the_generated_capabilities_grant_the_fifteen_commands_and_listen() {
+fn the_generated_capabilities_grant_the_sixteen_commands_and_listen() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("gen/schemas/capabilities.json");
     let text = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("tauri-build writes {}: {e}", path.display()));
@@ -58,6 +58,7 @@ fn the_generated_capabilities_grant_the_fifteen_commands_and_listen() {
             "allow-dictionary-search",
             "allow-export-file",
             "allow-import-file",
+            "allow-open-outside",
             "allow-progress-load",
             "allow-progress-save",
             "allow-search",

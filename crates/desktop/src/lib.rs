@@ -30,7 +30,7 @@ const MAIN_WINDOW: &str = "main";
 
 /// Opens `address` in the system browser, from Rust only; the system's
 /// refusal comes back as the reason (the navigation rule logs it).
-fn open_outside<R: Runtime>(app: &AppHandle<R>, address: &str) -> Result<(), String> {
+pub(crate) fn open_outside<R: Runtime>(app: &AppHandle<R>, address: &str) -> Result<(), String> {
     app.opener()
         .open_url(address, None::<&str>)
         .map_err(|error| error.to_string())
@@ -237,6 +237,7 @@ pub fn configure<R: Runtime>(
             commands::dictionary_search,
             commands::dictionary_passage,
             commands::dictionary_lookup,
+            commands::open_outside,
         ])
         .setup(move |app| {
             let dir = match data {

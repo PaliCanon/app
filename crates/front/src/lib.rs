@@ -21,6 +21,7 @@ pub mod data;
 pub mod dictionary;
 pub mod files;
 pub mod learn_mount;
+pub mod links;
 pub mod map_mount;
 pub mod nav;
 pub mod progress;

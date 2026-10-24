@@ -44,7 +44,7 @@ pub const SYNC_SIGN_OUT: &str = "sync_sign_out";
 
 /// Every command the webview may call, and nothing else (the capability
 /// grants exactly these).
-pub const COMMANDS: [&str; 15] = [
+pub const COMMANDS: [&str; 16] = [
     PROGRESS_LOAD,
     PROGRESS_SAVE,
     EXPORT_FILE,
@@ -60,6 +60,7 @@ pub const COMMANDS: [&str; 15] = [
     DICTIONARY_SEARCH,
     DICTIONARY_PASSAGE,
     DICTIONARY_LOOKUP,
+    OPEN_OUTSIDE,
 ];
 
 /// The event the shell emits when a sign-in ends (signed in, cancelled,
@@ -316,7 +317,7 @@ mod tests {
     }
 
     #[test]
-    fn the_fifteen_commands_are_the_designs() {
+    fn the_sixteen_commands_are_the_designs() {
         assert_eq!(
             COMMANDS,
             [
@@ -335,6 +336,7 @@ mod tests {
                 "dictionary_search",
                 "dictionary_passage",
                 "dictionary_lookup",
+                "open_outside",
             ]
         );
         assert_eq!(PROGRESS_STATUS_EVENT, "progress-status");
@@ -510,6 +512,10 @@ pub const DICTIONARY_SEARCH: &str = "dictionary_search";
 pub const DICTIONARY_PASSAGE: &str = "dictionary_passage";
 /// `dictionary_lookup(form)`: the senses of a word as written.
 pub const DICTIONARY_LOOKUP: &str = "dictionary_lookup";
+/// `open_outside(url)`: an `https:` or `mailto:` link opened in the system
+/// browser, under the navigation rule (task 009: the webview's own
+/// `target="_blank"` did not reach the rule).
+pub const OPEN_OUTSIDE: &str = "open_outside";
 
 /// One dictionary entry, as the dictionary asset holds it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

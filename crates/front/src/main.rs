@@ -38,6 +38,7 @@ async fn start() {
     if let Some(sync) = &sync {
         tauri::listen_sync(sync.clone());
     }
+    palicanon_app_front::links::install(tauri::open_outside);
     palicanon_ui_lib::csr::mount(move || {
         view! {
             <App store=store files=files search=search dictionary=dictionary sync=sync.clone() />

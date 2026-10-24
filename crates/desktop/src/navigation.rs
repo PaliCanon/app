@@ -30,6 +30,22 @@ pub fn decide(url: &Url) -> Navigation {
     }
 }
 
+/// The address a page asks to open outside (task 009): the rule's
+/// `OpenOutside` answer gives it back; anything else is the refusal's
+/// reason, logged by the caller.
+///
+/// # Errors
+/// The address does not parse, or the rule does not open it outside.
+pub fn open_request(address: &str) -> Result<Url, String> {
+    let url = Url::parse(address).map_err(|e| format!("not an address: {e}"))?;
+    match decide(&url) {
+        Navigation::OpenOutside => Ok(url),
+        Navigation::Stay | Navigation::Drop => {
+            Err(format!("dropped by the navigation rule: {url}"))
+        }
+    }
+}
+
 /// Exactly `tauri://localhost`: no other host (`localhost.evil.example`), no
 /// port, no credentials.
 fn is_app(url: &Url) -> bool {
@@ -129,6 +145,25 @@ fn log_outcome(url: &Url, outcome: &Outcome) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_open_request_passes_https_and_mailto_only() {
+        assert!(open_request("https://suttacentral.net/mn10").is_ok());
+        assert!(open_request("mailto:hello@example.org").is_ok());
+        for refused in [
+            "http://example.org/",
+            "file:///etc/hosts",
+            "tauri://localhost/learn",
+            "javascript:alert(1)",
+            "not an url",
+        ] {
+            let why = open_request(refused).unwrap_err();
+            assert!(
+                why.contains("rule") || why.contains("address"),
+                "{refused}: {why}"
+            );
+        }
+    }
 
     fn decide_str(address: &str) -> Navigation {
         decide(&Url::parse(address).expect("a valid address"))

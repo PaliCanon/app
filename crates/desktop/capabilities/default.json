@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The webview's one door: the bridge's fifteen commands (the progress, the files, the search, the dictionary, the sync) and the listen of the progress status and sync sign-in events. No opener, dialog or fs permission: those are called from Rust only.",
+  "description": "The webview's one door: the bridge's sixteen commands (the progress, the files, the search, the dictionary, the sync, the external link) and the listen of the progress status and sync sign-in events. No opener, dialog or fs permission: those are called from Rust only.",
   "windows": [
     "main"
   ],
@@ -21,6 +21,7 @@
     "allow-dictionary-search",
     "allow-dictionary-passage",
     "allow-dictionary-lookup",
+    "allow-open-outside",
     "core:event:allow-listen"
   ]
 }

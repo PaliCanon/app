@@ -9,10 +9,10 @@ use std::rc::Rc;
 
 use palicanon_app_bridge::{
     DICTIONARY_LOOKUP, DICTIONARY_PASSAGE, DICTIONARY_SEARCH, EXPORT_FILE, ExportArgs, IMPORT_FILE,
-    ImportAnswer, LoadAnswer, PROGRESS_LOAD, PROGRESS_SAVE, PROGRESS_STATUS_EVENT, PassageAnswer,
-    PullAnswer, PushAnswer, PushArgs, SEARCH, SEARCH_STATUS, SYNC_ACCOUNT, SYNC_CANCEL, SYNC_PULL,
-    SYNC_PUSH, SYNC_SIGN_IN, SYNC_SIGN_IN_EVENT, SYNC_SIGN_OUT, SaveArgs, SearchAnswer,
-    SearchRequest, SearchStatus, SensesAnswer, SignInEvent, SignInStart, StatusEvent,
+    ImportAnswer, LoadAnswer, OPEN_OUTSIDE, PROGRESS_LOAD, PROGRESS_SAVE, PROGRESS_STATUS_EVENT,
+    PassageAnswer, PullAnswer, PushAnswer, PushArgs, SEARCH, SEARCH_STATUS, SYNC_ACCOUNT,
+    SYNC_CANCEL, SYNC_PULL, SYNC_PUSH, SYNC_SIGN_IN, SYNC_SIGN_IN_EVENT, SYNC_SIGN_OUT, SaveArgs,
+    SearchAnswer, SearchRequest, SearchStatus, SensesAnswer, SignInEvent, SignInStart, StatusEvent,
     SyncAccountAnswer, SyncFailure, WordsAnswer,
 };
 use send_wrapper::SendWrapper;
@@ -295,4 +295,19 @@ impl DictionaryPort for TauriDictionary {
     fn lookup(&self, form: String, done: Box<dyn FnOnce(Result<SensesAnswer, String>)>) {
         ask(DICTIONARY_LOOKUP, FormArgs { form }, done);
     }
+}
+
+#[derive(Serialize)]
+struct OpenArgs {
+    url: String,
+}
+
+/// Asks the desktop to open `url` in the system browser (task 009); a
+/// refusal is logged by the desktop and shown in the console here.
+pub fn open_outside(url: String) {
+    wasm_bindgen_futures::spawn_local(async move {
+        if let Err(e) = invoke::<()>(OPEN_OUTSIDE, &OpenArgs { url }).await {
+            web_sys::console::warn_1(&format!("{OPEN_OUTSIDE}: {e}").into());
+        }
+    });
 }

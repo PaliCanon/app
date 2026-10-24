@@ -283,3 +283,17 @@ pub async fn dictionary_lookup(
         .await
         .map_err(|e| e.to_string())
 }
+
+/// `open_outside(url)`: a page's external link opened in the system browser
+/// (task 009), under the navigation rule: `https:` and `mailto:` only, the
+/// refusal logged and returned.
+///
+/// # Errors
+/// The address is refused by the rule, or the system would not open it.
+#[tauri::command]
+pub fn open_outside<R: Runtime>(app: AppHandle<R>, url: String) -> Result<(), String> {
+    let url = crate::navigation::open_request(&url).inspect_err(|why| log::warn!("{why}"))?;
+    crate::open_outside(&app, url.as_str())
+        .inspect(|()| log::info!("opened in the system browser: {url}"))
+        .inspect_err(|why| log::error!("the system refused to open {url}: {why}"))
+}
