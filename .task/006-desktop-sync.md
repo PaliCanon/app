@@ -1,6 +1,6 @@
 # 006 The progress synced through Google Drive in the desktop app
 
-status: review · rank: 7 · level: hard · type: feature · request: learn-pali 050 (user, 2026-10-16: «lance la desktop que je puisse check le google sync»; «sur le desktop il faudrait afficher le lien pas juste ouvrir le navigateur») · design: learn-pali 050 v7 (its `app` node), session learn-pali-050-progress-sync · after: [005 (branched from feat/learn-search-yuga), learn-pali 050 (its SyncTransport seam)]
+status: merged · rank: 7 · level: hard · type: feature · request: learn-pali 050 (user, 2026-10-16: «lance la desktop que je puisse check le google sync»; «sur le desktop il faudrait afficher le lien pas juste ouvrir le navigateur») · design: learn-pali 050 v7 (its `app` node), session learn-pali-050-progress-sync · after: [005 (branched from feat/learn-search-yuga), learn-pali 050 (its SyncTransport seam)]
 
 ## Summary
 Rank: difficulty 7 (OAuth installed-app flow with PKCE and a loopback in Rust, the Keychain, Drive calls, the shown link), impact 7 (the user's progress across devices) → 7.
@@ -25,3 +25,8 @@ learn-pali's fragment is consumed from the 050 branch commit until 050 is merged
 5. The dialog's Open-in-browser after a closed loopback — closed as is: the sign-in event (`apply`) clears the link, and the dialog is open only while a link is shown; a link opened after the timeout reaches a closed port and Google's page says so.
 6. Two `security-framework` majors in the lock — closed: `cargo tree -i security-framework@2.11.1` resolves nothing on this target (another platform's branch of the lock); `cargo deny check advisories` is clean.
 
+## Merge
+9fd79df on main (one squash of feat/dictionary: 003, 005, 006, 008, 009), 2026-10-24.
+
+## Retro
+No agents at the end (user, 2026-10-22). Five tasks waited on one branch chain and merged as one squash: the user's checks ran on bundles, not on main, for nine days; merge each task when its check passes, even if the next starts on top of it.

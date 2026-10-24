@@ -1,6 +1,6 @@
 # 008 The dictionary offline in the desktop app
 
-status: review · rank: 5 · level: standard · type: feature · request: learn-pali 068 (user, 2026-10-23: «dico pas dans l'app ?» … «on a pas besoin de taper l'API, on a déjà tout en local non ?» … «Lance dictionnaire et app.») · after: [006]
+status: merged · rank: 5 · level: standard · type: feature · request: learn-pali 068 (user, 2026-10-23: «dico pas dans l'app ?» … «on a pas besoin de taper l'API, on a déjà tout en local non ?» … «Lance dictionnaire et app.») · after: [006]
 session: learn-pali-068-passages-and-dictionary-port (archived 2026-10-24 with 068; what follows logs in the app's lasting session)
 worktree: /Users/lsh/projects/palicanon/wt/app008/app (branch `feat/dictionary`, from `feat/desktop-sync`)
 
@@ -30,3 +30,6 @@ Viewer: learn-pali-068-passages-and-dictionary-port/design (the `port` subgraph,
 | Check | ✓ | the user, 2026-10-24, on the bundle (02a348b + 009): « aller ! » |
 
 ## Retro
+
+## Merge
+9fd79df on main (one squash of feat/dictionary: 003, 005, 006, 008, 009), 2026-10-24.

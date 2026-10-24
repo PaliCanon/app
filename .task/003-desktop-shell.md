@@ -1,6 +1,6 @@
 # 003 The desktop shell with the Map first
 
-status: review · rank: 7 · level: hard · type: feature · request: app-001-palicanon-app T5a (user, 2026-10-16: "build l'app que je puisse checker"; "Oui, construis 048 + 021") · session: app-003-desktop-shell · after: [vizualisation 012 (its first tag)]
+status: merged · rank: 7 · level: hard · type: feature · request: app-001-palicanon-app T5a (user, 2026-10-16: "build l'app que je puisse checker"; "Oui, construis 048 + 021") · session: app-003-desktop-shell · after: [vizualisation 012 (its first tag)]
 
 ## Summary
 Rank (rank.md): difficulty 7 (a new Tauri app around two fragments from two repositories, a persistent store with a write queue and failure states, native commands with atomic writes), impact 7 (the first build of the PaliCanon app the user checks and later ships) → 7.
@@ -90,3 +90,6 @@ Voices: deep (10182, 10208, 10221), sage (10244, 10258, 10272: thin). Rulings (o
 Ruled out: http://tauri.localhost (Windows/Android, later targets; noted in the navigation rule's doc instead); BundledData not wired and the dead map guards (by design until vizualisation 012's tag; the tag commit wires them and adds vizualisation to the private-deps action's repositories); distinct markers for the stub's children (the stub is replaced by MapRoutes).
 
 ## Merge
+
+## Retro
+No agents at the end (user, 2026-10-22). Five tasks waited on one branch chain and merged as one squash: the user's checks ran on bundles, not on main, for nine days; merge each task when its check passes, even if the next starts on top of it.
