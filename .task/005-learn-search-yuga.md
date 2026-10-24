@@ -1,6 +1,6 @@
 # 005 Learn, Search with local yuga, and the Map in one app
 
-status: building · rank: 8 · level: hard · type: feature · request: app-001 T5a + T5b (user, 2026-10-16: «j'aimerais avoir le search et learn en plus de la map dans l'app»; «Fusionner sans dernier tour»; «Garde le modèle etc. en RAM») · session: app-005-learn-search-yuga · after: [003 (branched from feat/desktop-shell)]
+status: review · rank: 8 · level: hard · type: feature · request: app-001 T5a + T5b (user, 2026-10-16: «j'aimerais avoir le search et learn en plus de la map dans l'app»; «Fusionner sans dernier tour»; «Garde le modèle etc. en RAM») · session: app-005-learn-search-yuga · after: [003 (branched from feat/desktop-shell)]
 
 ## Summary
 Rank (rank.md): difficulty 8 (two fragments mounted with a native progress writer and native files, a sidecar process with bundled store and model, the lockstep across three tags), impact 8 (the first app the user checks with all three services) → 8.
