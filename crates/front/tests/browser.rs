@@ -194,7 +194,13 @@ fn button(label: &str) -> Option<web_sys::HtmlElement> {
         .filter_map(|at| buttons.item(at))
         .filter_map(|node| node.dyn_into::<web_sys::HtmlElement>().ok())
         .filter(|b| b.offset_parent().is_some() && !b.has_attribute("disabled"))
-        .find(|b| b.text_content().is_some_and(|text| text.contains(label)))
+        .find(|b| {
+            // An icon button has no text: its name is its `aria-label` (the
+            // '+' is 'New terms' since Learn fragment-v0.4.0).
+            b.text_content().is_some_and(|text| text.contains(label))
+                || b.get_attribute("aria-label")
+                    .is_some_and(|name| name.contains(label))
+        })
 }
 
 /// Clicks the button `label` once it is there and visible.
@@ -229,7 +235,9 @@ async fn learn_saves_an_answer(ports: &Ports) {
     assert_eq!(ports.saves.borrow().len(), 0, "mounting saves nothing");
     // An empty progress: the "+" opens the new terms' chooser, "Add" adds
     // them and starts the session, then the first card is answered.
-    click("+").await;
+    click("New terms").await;
+    // The picker (learn-pali 063): a count, then Add.
+    click("+5").await;
     click("Add").await;
     let before = ports.saves.borrow().len();
     click("Show the answer").await;
