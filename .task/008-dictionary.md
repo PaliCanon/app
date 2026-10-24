@@ -1,6 +1,6 @@
 # 008 The dictionary offline in the desktop app
 
-status: building · rank: 5 · level: standard · type: feature · request: learn-pali 068 (user, 2026-10-23: «dico pas dans l'app ?» … «on a pas besoin de taper l'API, on a déjà tout en local non ?» … «Lance dictionnaire et app.») · after: [006]
+status: review · rank: 5 · level: standard · type: feature · request: learn-pali 068 (user, 2026-10-23: «dico pas dans l'app ?» … «on a pas besoin de taper l'API, on a déjà tout en local non ?» … «Lance dictionnaire et app.») · after: [006]
 session: learn-pali-068-passages-and-dictionary-port (archived 2026-10-24 with 068; what follows logs in the app's lasting session)
 worktree: /Users/lsh/projects/palicanon/wt/app008/app (branch `feat/dictionary`, from `feat/desktop-sync`)
 
@@ -27,6 +27,6 @@ Viewer: learn-pali-068-passages-and-dictionary-port/design (the `port` subgraph,
 | Verify | ✓ | on 30232da: workspace clippy -D warnings, doc, tests (bridge, xtask incl. pins, desktop lib + acl/config/commands, front); `xtask dictionary` staged dictionary.db 23 MB, dpd.db 11 MB, passages.db 30 MB from the local cache (sha checked) |
 | Bundle | ✓ | `cargo tauri build --bundles app --config tauri.bundle.conf.json` on 30232da: PaliCanon.app 727 MB, `Resources/dictionary/` holds the three assets; opened for the user 2026-10-24 (the 006 bundle I had opened was quit first) |
 | Bundle (v0.5.1) | ✓ | 02a348b pins on `fragment-v0.5.1` (069: the search icon beside the '+'); bundle rebuilt and opened 2026-10-24 |
-| Check | doing | the user: Learn → Add a word → entries offline; a word tapped in a line → its senses; an added word's line |
+| Check | ✓ | the user, 2026-10-24, on the bundle (02a348b + 009): « aller ! » |
 
 ## Retro

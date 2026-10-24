@@ -1,6 +1,6 @@
 # 006 The progress synced through Google Drive in the desktop app
 
-status: building · rank: 7 · level: hard · type: feature · request: learn-pali 050 (user, 2026-10-16: «lance la desktop que je puisse check le google sync»; «sur le desktop il faudrait afficher le lien pas juste ouvrir le navigateur») · design: learn-pali 050 v7 (its `app` node), session learn-pali-050-progress-sync · after: [005 (branched from feat/learn-search-yuga), learn-pali 050 (its SyncTransport seam)]
+status: review · rank: 7 · level: hard · type: feature · request: learn-pali 050 (user, 2026-10-16: «lance la desktop que je puisse check le google sync»; «sur le desktop il faudrait afficher le lien pas juste ouvrir le navigateur») · design: learn-pali 050 v7 (its `app` node), session learn-pali-050-progress-sync · after: [005 (branched from feat/learn-search-yuga), learn-pali 050 (its SyncTransport seam)]
 
 ## Summary
 Rank: difficulty 7 (OAuth installed-app flow with PKCE and a loopback in Rust, the Keychain, Drive calls, the shown link), impact 7 (the user's progress across devices) → 7.
