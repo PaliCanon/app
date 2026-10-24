@@ -518,16 +518,17 @@ async fn another_keychain_refusal_is_not_retried_and_is_local_storage() {
 }
 
 #[tokio::test]
-async fn an_unreadable_keychain_item_is_signed_out_with_no_request() {
+async fn an_unreadable_keychain_item_is_a_storage_failure_with_no_request() {
     let google = FakeGoogle::start().await;
     let secrets = Arc::new(StaleSecrets {
         unreadable: true,
         ..StaleSecrets::default()
     });
     let service = SyncService::new(client(), Endpoints::at(&google.base), secrets);
-    assert_eq!(
-        service.pull().await,
-        PullAnswer::Failed(SyncFailure::SignedOut)
+    let answer = service.pull().await;
+    assert!(
+        matches!(&answer, PullAnswer::Failed(SyncFailure::Storage(why)) if why.contains("Keychain")),
+        "{answer:?}"
     );
     assert_eq!(google.seen_at("POST", TOKEN).len(), 0);
 }

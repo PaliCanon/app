@@ -286,10 +286,14 @@ impl SyncService {
             Ok(Some(refresh)) => refresh,
             Ok(None) => return Err(SyncFailure::SignedOut),
             Err(why) => {
-                // An item this build may not read: signed out, so the
-                // learner can sign in again (the store replaces it).
+                // An item this build may not read (or the learner refused
+                // the Keychain prompt): said as it is, so the reason line
+                // names the Keychain, not a sign-out (review 006, deep);
+                // signing in again replaces the item.
                 log::warn!("sync: the Keychain could not be read: {why}");
-                return Err(SyncFailure::SignedOut);
+                return Err(SyncFailure::Storage(format!(
+                    "the Keychain could not be read: {why}"
+                )));
             }
         };
         let body = google::form(&[

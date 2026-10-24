@@ -51,7 +51,12 @@ pub struct Redirect {
 /// (`GET /?code=…&state=… HTTP/1.1`); none when it is not a request.
 pub fn parse_request_line(line: &str) -> Option<Redirect> {
     let mut parts = line.split(' ');
-    let (_method, target) = (parts.next()?, parts.next()?);
+    let (method, target) = (parts.next()?, parts.next()?);
+    // Google's redirect is a GET (RFC 8252 §7.3); anything else is not a
+    // redirect at all (review 006, sage).
+    if method != "GET" {
+        return None;
+    }
     let query = target.split_once('?').map_or("", |(_, query)| query);
     let mut redirect = Redirect::default();
     for (name, value) in url::form_urlencoded::parse(query.as_bytes()) {
@@ -157,7 +162,13 @@ async fn answer(mut stream: TcpStream, state: &str) -> Option<Result<String, Wai
     );
     let _ = stream.write_all(response.as_bytes()).await;
     let _ = stream.shutdown().await;
-    Some(outcome)
+    // An answer for another sign-in (a stray or probing request) is told
+    // 400 and does not end this wait: only this sign-in's code, Google's
+    // refusal or a missing code do (review 006, gemini).
+    match outcome {
+        Err(WaitError::WrongState) => None,
+        outcome => Some(outcome),
+    }
 }
 
 /// The request's first line, once its head is in; none when the
@@ -179,6 +190,45 @@ async fn first_line(stream: &mut TcpStream) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_request_that_is_not_a_get_is_no_redirect() {
+        assert_eq!(parse_request_line("POST /?code=c&state=s HTTP/1.1"), None);
+        assert_eq!(parse_request_line("HEAD / HTTP/1.1"), None);
+        assert!(parse_request_line("GET /?code=c&state=s HTTP/1.1").is_some());
+    }
+
+    #[tokio::test]
+    async fn a_wrong_state_is_told_400_and_the_wait_goes_on() {
+        let loopback = Loopback::bind().await.unwrap();
+        let uri = loopback.redirect_uri();
+        let (_cancel_tx, cancel_rx) = oneshot::channel();
+        let waiting = tokio::spawn(async move {
+            loopback
+                .wait("mine", Duration::from_secs(5), cancel_rx)
+                .await
+        });
+        let probe = request(&uri, "GET /?code=theirs&state=other HTTP/1.1").await;
+        assert!(probe.starts_with("HTTP/1.1 400"), "{probe}");
+        let post = request(&uri, "POST /?code=theirs&state=mine HTTP/1.1").await;
+        assert_eq!(post, "", "no answer to a non-GET: {post}");
+        let mine = request(&uri, "GET /?code=right&state=mine HTTP/1.1").await;
+        assert!(mine.starts_with("HTTP/1.1 200"), "{mine}");
+        assert_eq!(waiting.await.unwrap(), Ok("right".to_string()));
+    }
+
+    /// One request line to the loopback, its whole answer as text.
+    async fn request(uri: &str, line: &str) -> String {
+        let host = uri.trim_start_matches("http://");
+        let mut stream = TcpStream::connect(host).await.unwrap();
+        stream
+            .write_all(format!("{line}\r\nHost: {host}\r\n\r\n").as_bytes())
+            .await
+            .unwrap();
+        let mut out = Vec::new();
+        let _ = stream.read_to_end(&mut out).await;
+        String::from_utf8_lossy(&out).into_owned()
+    }
 
     #[test]
     fn the_redirect_is_read_from_the_request_line() {
