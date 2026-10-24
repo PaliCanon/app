@@ -39,8 +39,10 @@ pub fn App(
     files: AppFiles,
     /// Search over the local engine.
     search: AppSearch,
-    /// Learn's dictionary, over the desktop's assets (task 008).
-    dictionary: AppDictionary,
+    /// Learn's dictionary, over the desktop's assets (task 008); none in
+    /// the browser tests, where Learn says the dictionary is not available.
+    #[prop(optional_no_strip)]
+    dictionary: Option<AppDictionary>,
     /// The sync through the learner's Google Drive; none: no sync UI (a
     /// build without the OAuth secret).
     #[prop(optional_no_strip)]
@@ -66,8 +68,10 @@ pub fn AppWith(
     files: AppFiles,
     /// What answers the searches.
     search: AppSearch,
-    /// Learn's dictionary, over the desktop's assets (task 008).
-    dictionary: AppDictionary,
+    /// Learn's dictionary, over the desktop's assets (task 008); none in
+    /// the browser tests, where Learn says the dictionary is not available.
+    #[prop(optional_no_strip)]
+    dictionary: Option<AppDictionary>,
     /// The sync; none: no sync UI.
     #[prop(optional_no_strip)]
     sync: Option<AppSync>,
@@ -78,12 +82,12 @@ pub fn AppWith(
     let store: SharedStore = Rc::new(store);
     let files: SharedFiles = Rc::new(files);
     let transport = sync.clone().map(|sync| Rc::new(sync) as SharedSync);
-    let words: SharedDictionary = Rc::new(dictionary);
+    let words: Option<SharedDictionary> = dictionary.map(|d| Rc::new(d) as SharedDictionary);
     // Beside the provider, not in its children (they must be `Send`; the
     // sync holds an `Rc`).
     let link = sync.map(|sync| view! { <SignInLink sync=sync /> });
     view! {
-        <LearnProvider store=store files=files sync=transport dictionary=Some(words)>
+        <LearnProvider store=store files=files sync=transport dictionary=words>
             <Router>
                 <Shell>
                     <AppRoutes />
