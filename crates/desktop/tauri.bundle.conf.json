@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "build": {
+    "beforeBuildCommand": {
+      "script": "cargo xtask yuga && cargo xtask dictionary && trunk build --release --cargo-profile wasm-release",
+      "cwd": "../front",
+      "wait": true
+    }
+  },
+  "bundle": {
+    "externalBin": [
+      "../../target/yuga/bin/yuga-sidecar"
+    ],
+    "resources": {
+      "../../target/yuga/store/": "yuga/store/",
+      "../../target/yuga/model/": "yuga/model/",
+      "../../target/yuga/licence/": "yuga/licence/",
+      "../../target/dictionary/": "dictionary/"
+    }
+  }
+}

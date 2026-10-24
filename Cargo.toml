@@ -1,13 +1,38 @@
 [workspace]
 resolver = "3"
-members = ["crates/identity"]
+members = ["crates/identity", "crates/bridge", "crates/front", "crates/desktop", "crates/xtask"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.91"
 license = "CC-BY-NC-4.0"
 repository = "https://github.com/PaliCanon/app"
+
+[workspace.dependencies]
+leptos = "0.8"
+leptos_router = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# ui-lib by git tag, client side only (decision 2026-10-05: a service takes a
+# new ui-lib by a bump commit; never a path or a [patch]). `cargo xtask pins`
+# checks that exactly one revision of it is built, with `csr` and without
+# `ssr` or `hydrate`.
+palicanon-ui-lib = { git = "ssh://git@github.com/PaliCanon/ui-lib.git", tag = "v0.4.3", version = "0.4.3", default-features = false, features = ["csr"] }
+
+# The map (vizualisation 012's fragment), by tag, client side only: `csr` turns
+# on ui-lib's `csr` in it, so the app builds one ui-lib. Its package lives in the
+# repository's `app/` directory; its data files are the repository's `public/`.
+vizualisation = { git = "ssh://git@github.com/PaliCanon/vizualisation.git", tag = "v0.2.4", version = "0.1.0", default-features = false, features = ["csr"] }
+# Learn (learn-pali 048's fragment, with 050's sync: the SyncTransport seam)
+# and its progress format, by one tag, client side only: `csr` turns on
+# ui-lib's `csr`, no web store.
+learn_pali = { git = "ssh://git@github.com/PaliCanon/learn-pali.git", tag = "fragment-v0.5.1", version = "0.1.0", default-features = false, features = ["csr"] }
+learn_core = { git = "ssh://git@github.com/PaliCanon/learn-pali.git", tag = "fragment-v0.5.1", version = "0.1.0" }
+# Search (search-front 021's fragment), by tag, client side only.
+search_front = { git = "ssh://git@github.com/PaliCanon/search-front.git", tag = "fragment-v0.1.2", version = "0.1.0", default-features = false, features = ["csr"] }
+# The engine's live-view count, for the browser test (same tag, same checkout).
+map-engine = { git = "ssh://git@github.com/PaliCanon/vizualisation.git", tag = "v0.2.4", version = "0.1.0" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
@@ -18,3 +43,11 @@ missing_docs = "warn"
 pedantic = { level = "warn", priority = -1 }
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
+
+# The browser build (Trunk, crates/front): small and fast to download.
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
