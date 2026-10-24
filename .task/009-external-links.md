@@ -1,6 +1,6 @@
 # 009 External links open in the system browser
 
-status: building · rank: 2 · level: simple · type: fix · request: the user, 2026-10-24 (« read on sutta central ne marche pas ? ») · after: [008]
+status: review · rank: 2 · level: simple · type: fix · request: the user, 2026-10-24 (« read on sutta central ne marche pas ? ») · after: [008]
 worktree: /Users/lsh/projects/palicanon/wt/app008/app (branch `feat/dictionary`, with 008)
 
 ## Summary
@@ -16,6 +16,6 @@ Ruled out: granting the webview the opener plugin (`opener:allow-open-url`): the
 | Build | ✓ | 97f82ff; bridge `OPEN_OUTSIDE`, desktop `open_request` + command, capability, front `links.rs` + `tauri::open_outside`, installed before the mount |
 
 | Verify | ✓ | workspace clippy, front clippy on wasm32, tests (bridge 16 commands, acl, config, navigation `open_request`, front `external`) |
-| Check | doing | bundle rebuilt and opened 2026-10-24; the user clicks 'Read on SuttaCentral' in Search: the system browser opens the sutta; the log says 'opened in the system browser' |
+| Check | ✗ | 2026-10-24: the app logs 'opened in the system browser' (d83b25b: /usr/bin/open exits 0) yet no browser shows the page, from the user's own launch too; `open https://…` from a shell opens nothing either; Chrome runs in background mode (`--no-startup-window`, 4 days, launchd) as the registered https handler. The user: « ça vient probablement du PC. Laissons ça de côté ». Set aside: the command is right as far as the system tells; to retry on a machine where `open` works, or after quitting the background Chrome |
 
 ## Retro
