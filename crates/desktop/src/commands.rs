@@ -291,9 +291,12 @@ pub async fn dictionary_lookup(
 /// # Errors
 /// The address is refused by the rule, or the system would not open it.
 #[tauri::command]
-pub fn open_outside<R: Runtime>(app: AppHandle<R>, url: String) -> Result<(), String> {
+pub async fn open_outside<R: Runtime>(app: AppHandle<R>, url: String) -> Result<(), String> {
     let url = crate::navigation::open_request(&url).inspect_err(|why| log::warn!("{why}"))?;
-    crate::open_outside(&app, url.as_str())
+    let address = url.to_string();
+    tauri::async_runtime::spawn_blocking(move || crate::open_outside_checked(&app, &address))
+        .await
+        .map_err(|e| e.to_string())?
         .inspect(|()| log::info!("opened in the system browser: {url}"))
         .inspect_err(|why| log::error!("the system refused to open {url}: {why}"))
 }

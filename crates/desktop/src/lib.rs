@@ -36,6 +36,41 @@ pub(crate) fn open_outside<R: Runtime>(app: &AppHandle<R>, address: &str) -> Res
         .map_err(|error| error.to_string())
 }
 
+/// Opens `address` and waits for the system's verdict (task 009): on macOS
+/// `/usr/bin/open` is run to its end, so a handler that takes the address
+/// and shows nothing, or refuses it, is reported with its message instead
+/// of a success logged at the spawn.
+#[cfg(target_os = "macos")]
+pub(crate) fn open_outside_checked<R: Runtime>(
+    _app: &AppHandle<R>,
+    address: &str,
+) -> Result<(), String> {
+    let output = std::process::Command::new("/usr/bin/open")
+        .arg("--")
+        .arg(address)
+        .output()
+        .map_err(|e| format!("/usr/bin/open could not run: {e}"))?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!(
+            "/usr/bin/open {}: {}",
+            output.status,
+            stderr.trim()
+        ))
+    }
+}
+
+/// Opens `address` through the opener plugin (the other platforms).
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn open_outside_checked<R: Runtime>(
+    app: &AppHandle<R>,
+    address: &str,
+) -> Result<(), String> {
+    open_outside(app, address)
+}
+
 /// The webview's answer to a request for a new window: the navigation rule's
 /// answer ([`navigation::allow_new_window`], which is never yes), as Tauri's
 /// response. Kept apart from the closure so it is tested.
