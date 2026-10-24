@@ -15,6 +15,7 @@ Decided 2026-10-24 (design v2): the script owns the signing (`codesign --force -
 | Build | ✓ | scripts/release.sh (build, publish), scripts/release-notes.md, scripts/release.test.sh: 114 checks against stubs, 111 with the real hdiutil/ditto/shasum/cp on a fake app; ci.yml jobs `scripts` (ubuntu) and `scripts-macos` |
 | Review 1 | ✓ | @deep (15241): 8 findings, 8 tests; 6 taken, 2 closed with the code (below); round 2 on the fix diff |
 | Review 2 | ✓ | @deep (15251) on the fix diff: 4 remarks; 2 taken (a gh failure other than not-found refuses; the check count pinned per mode: 119 stubs, 116 real tools), 1 closed with GitHub's rule (a draft creates no tag), 1 left as deep suggests. Last round at rank 4 |
+| Merge | ✓ | 043f866 on main (squash of `feat/app-public-release`, tip c4f636f); the first run of the script follows on main |
 
 ## Design
 Viewer: app-007-public-release/design, v2 (2026-10-24).
