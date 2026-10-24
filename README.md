@@ -55,6 +55,25 @@ repository). `PALICANON_NO_SYNC=1` builds without it; a machine without the
 item builds an app with no sync and no sync UI. A secret changed in the
 Keychain is taken after `cargo clean -p palicanon-app-desktop`.
 
+## Release (macOS, Apple silicon)
+
+`scripts/release.sh build` on the user's Mac (task 007): the preflight (clean
+tree on a pushed `main`, the version of `crates/desktop/tauri.conf.json` equal
+to `Cargo.toml`'s, the tag `app-v<version>` existing nowhere, one Developer ID
+Application identity, the notary profile `palicanon-notary`, the Desktop OAuth
+secret in the Keychain), then the unsigned Tauri build with the home path
+remapped, the gate on the binary, the signing (sidecar then app, timestamped,
+hardened runtime), the notarization and stapling of the app, the DMG made from
+the stapled app and notarized in turn, Gatekeeper assessed, the SHA-256 taken
+after the staple, and a DRAFT GitHub Release holding
+`PaliCanon-<version>-aarch64.dmg` and its copy `PaliCanon-aarch64.dmg`. After
+the check of the DMG, `scripts/release.sh publish` verifies the draft's assets
+and publishes it: from then on
+`https://github.com/PaliCanon/app/releases/latest/download/PaliCanon-aarch64.dmg`
+is the stable link. A version is released once: bump `version` in both files
+for the next. `bash scripts/release.test.sh` proves the order and the refusals
+against stubs (CI job `scripts`).
+
 ## Decisions
 
 Both in `../docs/decisions.md`:

@@ -163,6 +163,25 @@ jobs:
           tool: cargo-deny
       - run: cargo deny check advisories bans sources licenses
 
+  # The shell scripts' tests: the release script against stubs of every tool
+  # it calls (codesign, xcrun, hdiutil, gh, security, cargo, git), so the order
+  # and the refusals are proven without a Mac, a certificate or a release.
+  scripts:
+    name: scripts (release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: bash scripts/release.test.sh
+
+  # The same suite on macOS with the real hdiutil, ditto, shasum and cp on a
+  # fake .app: the layer that catches a wrong flag of theirs (review 007, T8).
+  scripts-macos:
+    name: scripts (release, macOS disk tools)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: RELEASE_TEST_REAL_TOOLS=1 bash scripts/release.test.sh
+
   # The front built for the browser by Trunk (its pre_build hooks run
   # `cargo xtask css` and `cargo xtask data`), as the desktop build embeds it.
   front-build:
