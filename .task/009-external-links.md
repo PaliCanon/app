@@ -13,6 +13,9 @@ Ruled out: granting the webview the opener plugin (`opener:allow-open-url`): the
 ## Log
 | Step | Result | Output |
 | --- | --- | --- |
-| Build | doing | bridge `OPEN_OUTSIDE`, desktop `open_request` + command, capability, front `links.rs` + `tauri::open_outside`, installed before the mount |
+| Build | ✓ | 97f82ff; bridge `OPEN_OUTSIDE`, desktop `open_request` + command, capability, front `links.rs` + `tauri::open_outside`, installed before the mount |
+
+| Verify | ✓ | workspace clippy, front clippy on wasm32, tests (bridge 16 commands, acl, config, navigation `open_request`, front `external`) |
+| Check | doing | bundle rebuilt and opened 2026-10-24; the user clicks 'Read on SuttaCentral' in Search: the system browser opens the sutta; the log says 'opened in the system browser' |
 
 ## Retro
