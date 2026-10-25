@@ -264,7 +264,7 @@ draft_release() {
 # Prints the JSON for the caller.
 release_json() { # draft|any
   local json
-  json="$(gh release view "$tag" --repo "$repo" --json isDraft,isLatest,assets)"
+  json="$(gh release view "$tag" --repo "$repo" --json isDraft,assets)"
   RELEASE_JSON="$json" python3 - "$versioned" "$stable" "${size_bytes:-}" "$1" <<'PY' || refuse "the release $tag does not hold the two assets as built"
 import json, os, sys
 d = json.loads(os.environ["RELEASE_JSON"])
@@ -282,6 +282,11 @@ if sizes[sys.argv[1]] != sizes[sys.argv[2]]:
 PY
   printf '%s' "$json"
 }
+# The latest release's tag, empty when the repository has none (gh release
+# view has no isLatest field: the first real run, 2026-10-25).
+latest_tag() {
+  gh api "repos/$repo/releases/latest" --jq .tag_name 2>/dev/null || true
+}
 json_field() { # json field
   printf '%s' "$1" | python3 -c 'import json,sys; v=json.load(sys.stdin).get(sys.argv[1]); print("true" if v is True else "false" if v is False else v)' "$2"
 }
@@ -296,12 +301,12 @@ publish_release() {
   # A failed edit is not fatal here: the release is read back and judged.
   if [ "$(json_field "$json" isDraft)" = true ]; then
     gh release edit "$tag" --repo "$repo" --draft=false --latest >/dev/null || echo "the edit failed: reading the release back"
-  elif [ "$(json_field "$json" isLatest)" != true ]; then
+  elif [ "$(latest_tag)" != "$tag" ]; then
     gh release edit "$tag" --repo "$repo" --latest >/dev/null || echo "the edit failed: reading the release back"
   fi
   json="$(release_json any)"
   [ "$(json_field "$json" isDraft)" = false ] || refuse "the release is still a draft after the edit"
-  [ "$(json_field "$json" isLatest)" = true ] || refuse "the release is not the latest after the edit"
+  [ "$(latest_tag)" = "$tag" ] || refuse "the release is not the latest after the edit"
   size="$(printf '%s' "$json" | python3 -c 'import json,sys; d=json.load(sys.stdin); print([a["size"] for a in d["assets"] if a["name"]==sys.argv[1]][0])' "$stable")"
   step "verify: the stable link"
   local headers

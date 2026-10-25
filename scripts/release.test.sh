@@ -78,6 +78,11 @@ case "$*" in
     [ -n "${STUB_GH_DOWN:-}" ] && { echo "error connecting to api.github.com" >&2; exit 1; }
     [ -n "${STUB_RELEASE_EXISTS:-}" ] || { echo "release not found" >&2; exit 1; }
     echo "{\"isDraft\": ${STUB_RELEASE_EXISTS}}" ;;
+  *"release view"*"--json"*isLatest*)
+    # the real gh knows no such field
+    echo "Unknown JSON field: \"isLatest\"" >&2; exit 1 ;;
+  *"api repos/PaliCanon/app/releases/latest"*)
+    if [ -n "${STUB_LATEST:-}" ] && [ "$STUB_LATEST" = true ] || grep -q latest "$state" 2>/dev/null; then echo "app-v0.1.0"; else echo "gh: Not Found (HTTP 404)" >&2; exit 1; fi ;;
   *"release view"*"--json"*)
     python3 - "$STUB_UPLOADS" "${STUB_DRAFT:-true}" "${STUB_LATEST:-false}" "${STUB_SIZE_OVERRIDE:-}" <<'"'"'PY'"'"'
 import json, os, sys
