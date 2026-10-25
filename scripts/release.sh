@@ -49,6 +49,13 @@ refuse() {
   exit 1
 }
 step() { echo "== $1"; }
+# Searches a command's whole output. Never pipe a command into grep -q: under
+# pipefail, grep -q exits at the first match, the command dies of SIGPIPE
+# and the pipeline fails (the first real run, 2026-10-25: a signed,
+# timestamped app refused as "no timestamp").
+has() { # pattern text
+  grep -Eq -- "$1" <<<"$2"
+}
 # A refusal while the dmg is attached leaves nothing mounted behind.
 cleanup() {
   if [ -n "$mounted" ]; then hdiutil detach "$mounted" >/dev/null 2>&1 || true; fi
@@ -154,8 +161,8 @@ gate_binary() {
   [ -f "$sidecar" ] || refuse "no sidecar at $sidecar"
   # The secret is compared through a file descriptor, never an argument.
   grep -a -q -F -f <(oauth_secret) "$bin" || refuse "the OAuth secret is not in the binary: the build read no Keychain item"
-  file "$bin" | grep -q "arm64" || refuse "the binary is not arm64"
-  file "$sidecar" | grep -q "arm64" || refuse "the sidecar is not arm64"
+  has "arm64" "$(file "$bin")" || refuse "the binary is not arm64"
+  has "arm64" "$(file "$sidecar")" || refuse "the sidecar is not arm64"
   if grep -a -q -F -- "/Users/" "$bin"; then refuse "a /Users/ path is in the binary (the remap did not apply)"; fi
   if grep -q -F -- "/Users/" "$app/Contents/Info.plist"; then refuse "a /Users/ path is in Info.plist"; fi
 }
@@ -169,7 +176,7 @@ sign_app() {
   sign_path "$app/Contents/MacOS/yuga-sidecar"
   sign_path "$app"
   codesign --verify --deep --strict "$app"
-  codesign -dvv "$app" 2>&1 | grep -q '^Timestamp=' || refuse "the app's signature has no timestamp"
+  has '^Timestamp=' "$(codesign -dvv "$app" 2>&1)" || refuse "the app's signature has no timestamp"
 }
 
 notarize() { # path label
@@ -211,13 +218,13 @@ make_dmg() {
 
 verify_dmg() {
   step "verify: Gatekeeper on the dmg and on the app it holds"
-  spctl -a -t open --context context:primary-signature -vv "$scratch/$versioned" 2>&1 | grep -q "source=Notarized Developer ID" || refuse "spctl does not accept the dmg as Notarized Developer ID"
+  has "source=Notarized Developer ID" "$(spctl -a -t open --context context:primary-signature -vv "$scratch/$versioned" 2>&1 || true)" || refuse "spctl does not accept the dmg as Notarized Developer ID"
   local mount="$scratch/mnt"
   mkdir -p "$mount"
   hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$scratch/$versioned" >/dev/null
   mounted="$mount"
   local ok=0
-  spctl -a -t exec -vv "$mount/$app_name.app" 2>&1 | grep -q "source=Notarized Developer ID" && ok=1
+  has "source=Notarized Developer ID" "$(spctl -a -t exec -vv "$mount/$app_name.app" 2>&1 || true)" && ok=1
   hdiutil detach "$mount" >/dev/null
   mounted=""
   [ "$ok" = 1 ] || refuse "spctl does not accept the app inside the dmg"
@@ -299,8 +306,9 @@ publish_release() {
   step "verify: the stable link"
   local headers
   headers="$(curl -sIL "$stable_link")"
-  printf '%s' "$headers" | grep -Eqi '^HTTP/[0-9.]+ 200' || refuse "the stable link does not answer 200: $stable_link"
-  printf '%s' "$headers" | tr -d '\r' | grep -Eqi "^content-length: $size\$" || refuse "the stable link's content-length is not $size"
+  headers="$(tr -d '\r' <<<"$headers")"
+  has '^HTTP/[0-9.]+ 200' "$headers" || refuse "the stable link does not answer 200: $stable_link"
+  has "^[Cc]ontent-[Ll]ength: $size\$" "$headers" || refuse "the stable link's content-length is not $size"
   echo "published: $stable_link"
 }
 

@@ -134,7 +134,9 @@ case "$*" in
 esac'
 stub codesign '
 case "$*" in
-  *-dvv*) echo "Timestamp=24 Oct 2026" >&2 ;;
+  # The real codesign -dvv prints lines after Timestamp=; a long tail makes
+  # an early-exit grep kill it with SIGPIPE (the failure of the first real run).
+  *-dvv*) { echo "Authority=Developer ID Application: Test"; echo "Timestamp=24 Oct 2026"; seq 1 200000 | sed "s/^/Info line /"; } >&2 ;;
   *) ;;
 esac'
 stub cargo '
@@ -356,13 +358,14 @@ run publish STUB_UPLOADS="$work/none"
 refused "publish with no asset at all"
 
 echo "== wiring"
+if grep -Eq -- "\| *grep -[A-Za-z]*q" "$script"; then flunk "no early-exit grep pipeline in release.sh (SIGPIPE under pipefail)"; else pass "no early-exit grep pipeline in release.sh (SIGPIPE under pipefail)"; fi
 if grep -q "bash scripts/release.test.sh" "$root/.github/workflows/ci.yml"; then pass "ci.yml runs this suite"; else flunk "ci.yml runs this suite"; fi
 if grep -q "RELEASE_TEST_REAL_TOOLS=1 bash scripts/release.test.sh" "$root/.github/workflows/ci.yml"; then pass "ci.yml runs this suite on macOS with the real disk tools"; else flunk "ci.yml runs this suite on macOS with the real disk tools"; fi
 if [ -x "$script" ]; then pass "release.sh is executable"; else flunk "release.sh is executable"; fi
 
 # The count is pinned per mode: the stub mode owns the order and argv
 # assertions that the real-tools mode cannot make (review 007, round 2).
-if [ -n "${RELEASE_TEST_REAL_TOOLS:-}" ]; then want_checks=115; else want_checks=118; fi
+if [ -n "${RELEASE_TEST_REAL_TOOLS:-}" ]; then want_checks=116; else want_checks=119; fi
 assert_eq "the suite ran every check of this mode" "$want_checks" "$checks"
 
 echo
