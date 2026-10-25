@@ -74,6 +74,13 @@ is the stable link. A version is released once: bump `version` in both files
 for the next. `bash scripts/release.test.sh` proves the order and the refusals
 against stubs (CI job `scripts`).
 
+Windows and Linux (task 013): once the macOS release exists,
+`gh workflow run release-desktop.yml -f tag=app-v<version>` builds the Linux
+`.deb` and `.AppImage` and the Windows `setup.exe` on GitHub's runners and
+attaches them (stable names `PaliCanon-x86_64.deb`, `PaliCanon-x86_64.AppImage`,
+`PaliCanon-x86_64-setup.exe`). Intel macOS is not built: ONNX Runtime has no
+prebuilt binary for it.
+
 ## Decisions
 
 Both in `../docs/decisions.md`:

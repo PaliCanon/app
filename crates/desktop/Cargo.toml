@@ -40,7 +40,9 @@ url = "2"
 # calls over rustls (ring) and a loopback listener on tokio.
 base64 = "0.22"
 getrandom = "0.3"
-keyring = { version = "3", features = ["apple-native"] }
+# The secret store per platform: the macOS Keychain, the Windows Credential
+# Manager, the Secret Service (GNOME Keyring, KWallet) on Linux.
+keyring = "3"
 learn_pali.workspace = true
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
@@ -52,6 +54,13 @@ tokio = { version = "1", features = ["net", "io-util", "time", "sync", "macros",
 # keyring 3 already uses.
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework = "3"
+keyring = { version = "3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
 
 [dev-dependencies]
 # The mock runtime, to send the webview's IPC messages through the real ACL.
