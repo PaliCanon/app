@@ -21,9 +21,8 @@ on:
         description: The release to attach the bundles to (app-v<version>)
         required: true
       inputs:
-        description: The pre-release holding the build inputs
+        description: The pre-release holding the build inputs (build-inputs-<date>), named on every run
         required: true
-        default: build-inputs-2026-10-25
 
 permissions:
   contents: write
@@ -87,6 +86,23 @@ jobs:
         run: |
           [ -n "$PALICANON_GOOGLE_DESKTOP_SECRET" ] || { echo "the secret PALICANON_GOOGLE_DESKTOP_SECRET is missing: the app would ship with no sync" >&2; exit 1; }
           cargo tauri build --bundles ${{ matrix.bundles }} --config tauri.bundle.conf.json
+      - name: The sidecar runs from the bundle
+        shell: bash
+        # It refuses a missing store with a message: it starts, its ONNX
+        # Runtime (linked statically by ort) included. On Linux, ldd shows no
+        # library left unresolved.
+        run: |
+          bin="$(ls target/yuga/bin/yuga-sidecar-* | head -1)"
+          if [ "$RUNNER_OS" = Linux ]; then
+            libs="$(ldd "$bin")"
+            echo "$libs"
+            if grep -q "not found" <<<"$libs"; then echo "a library of the sidecar is unresolved" >&2; exit 1; fi
+          fi
+          set +e
+          out="$("$bin" --store does-not-exist --model does-not-exist 2>&1 </dev/null)"
+          code=$?
+          echo "exit $code: $out"
+          [ "$code" -ne 0 ] && [ -n "$out" ]
       - name: Name, hash and attach
         shell: bash
         env:

@@ -24,4 +24,15 @@ The Windows and Linux bundles of 0.1.0 are built from a later commit than the ma
 | Define | ✓ | the user's go 2026-10-25 for the deploy key and the CI route; GCP identity for the public repo ruled out in favour of the build-inputs pre-release (no new exposure: the files ship in every bundle) |
 | Build | doing | xtask targets (63 xtask tests), keyring per platform, icon.ico, deny targets, release-desktop.yml, attach-bundles.sh + test (30), check-platforms job; yuga sidecar workflow pushed, blocked by billing |
 
+## Reviews
+### Round 1 — 2026-10-25 (@deep, lasting session `app`, entry `review-013-desktop-platforms`, message 15333)
+1. Nothing guards the sidecar before the bundle — closed with the code: the bundle's first command is `cargo xtask yuga`, whose `current_target()` refuses a platform absent from `TARGETS`, naming it, before Tauri resolves `externalBin`; tested (`a_platform_with_no_released_sidecar_is_refused`, `.exe` on Windows only).
+2. `PALICANON_NO_SYNC` may compile the keyring out — closed with the code: the flag only stops build.rs from compiling the OAuth secret in (`option_env!`); the sync module and keyring always compile, so the check covers both backends.
+3. No Secret Service on a minimal Linux — closed with the code: a store that cannot be read is `SyncFailure::Storage` (006), the sync says so and the app runs.
+4. Windows lock semantics — closed with the code: the lock is on `progress.lock`, never on the progress file, so a reader is not blocked; the progress file is `sync_all`ed before the rename (`write_synced`); the OS releases a handle's lock when the process dies.
+5. What is inside the bundle — TAKEN in part: the release workflow runs the staged sidecar (it starts and refuses a missing store) and, on Linux, `ldd` must leave nothing unresolved; Tauri's AppImage carries WebKitGTK through linuxdeploy's GTK plugin.
+6. Two 0.1.0 builds from two commits — TAKEN: `BUILD-INFO-<kinds>.txt` (tag, commit, date) is attached with the bundles.
+7. `--clobber` on a versioned asset — TAKEN: a versioned name already on the release is refused unless `ATTACH_FORCE=1`; stable names are replaced freely; the `.sha256` files go up last; the build-inputs release has no default.
+8. Manual steps; deny's Linux targets unchecked — closed: the manual steps are the design (signing on the Mac); the `cargo-deny` job evaluates every target listed in deny.toml whatever its runner.
+
 ## Retro

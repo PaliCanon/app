@@ -12,11 +12,15 @@
 #   appimage/*.AppImage  -> PaliCanon-<version>-x86_64.AppImage  and PaliCanon-x86_64.AppImage
 #   nsis/*-setup.exe     -> PaliCanon-<version>-x86_64-setup.exe and PaliCanon-x86_64-setup.exe
 #
-# Each versioned file gets a `.sha256` beside it; both names are uploaded to
-# the release (replacing an asset of the same name, so a re-run repairs a
-# failed one). Exit 1 when the tag and the version differ, when the release
-# does not exist, or when the directory holds none of the three bundles;
-# 64 for a usage error.
+# Each versioned file gets a `.sha256` beside it, and the run a
+# `BUILD-INFO-<kind>.txt` (the tag, the commit, the date): the Windows and
+# Linux bundles may come from a later commit than the macOS one. The stable
+# names are replaced freely; a versioned name already on the release is
+# refused unless ATTACH_FORCE=1 (a published hash never changes silently).
+# The .sha256 files go up last. Exit 1 when the tag and the version differ,
+# when the release does not exist, when a versioned asset exists without
+# ATTACH_FORCE, or when the directory holds none of the three bundles; 64
+# for a usage error.
 set -euo pipefail
 
 if [ "$#" -ne 2 ]; then
@@ -29,6 +33,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="${ATTACH_ROOT:-$(cd "$here/.." && pwd)}"
 repo="${ATTACH_REPO:-PaliCanon/app}"
 out="${ATTACH_OUT:-$dir/attach}"
+commit="${ATTACH_COMMIT:-${GITHUB_SHA:-$(git -C "$root" rev-parse HEAD 2>/dev/null || echo unknown)}}"
 
 refuse() {
   echo "attach-bundles.sh: $1" >&2
@@ -37,7 +42,7 @@ refuse() {
 
 version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$root/crates/desktop/tauri.conf.json")"
 [ "$tag" = "app-v$version" ] || refuse "the tag $tag is not app-v$version (tauri.conf.json)"
-gh release view "$tag" --repo "$repo" >/dev/null 2>&1 || refuse "no release $tag on $repo: run scripts/release.sh first"
+existing="$(gh release view "$tag" --repo "$repo" --json assets --jq '.assets[].name' 2>/dev/null)" || refuse "no release $tag on $repo: run scripts/release.sh first"
 
 sha_of() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
@@ -63,9 +68,19 @@ one "$dir/deb/*.deb" ".deb"
 one "$dir/appimage/*.AppImage" ".AppImage"
 one "$dir/nsis/*-setup.exe" "-setup.exe"
 [ "$found" -gt 0 ] || refuse "no deb, AppImage or setup.exe under $dir"
+kinds="$(ls "$out" | sed -nE 's/^PaliCanon-x86_64(.*)$/\1/p' | tr -d '.' | tr '\n' '-' | sed 's/-$//')"
+printf 'tag %s\ncommit %s\nbuilt %s\n' "$tag" "$commit" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$out/BUILD-INFO-$kinds.txt"
 
-for f in "$out"/*; do
-  gh release upload "$tag" --repo "$repo" --clobber "$f" >/dev/null
-  echo "attached $(basename "$f")"
+# A versioned name already published is refused unless forced.
+for f in "$out"/PaliCanon-"$version"-*; do
+  name="$(basename "$f")"
+  if grep -qxF -- "$name" <<<"$existing" && [ "${ATTACH_FORCE:-}" != 1 ]; then
+    refuse "$name is already on $tag: set ATTACH_FORCE=1 to replace a published asset"
+  fi
 done
+upload() { gh release upload "$tag" --repo "$repo" --clobber "$1" >/dev/null && echo "attached $(basename "$1")"; }
+for f in "$out"/*; do
+  case "$f" in *.sha256) ;; *) upload "$f" ;; esac
+done
+for f in "$out"/*.sha256; do upload "$f"; done
 cat "$out"/*.sha256

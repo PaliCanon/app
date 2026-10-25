@@ -25,7 +25,7 @@ cat >"$stubs/gh" <<'EOF'
 #!/usr/bin/env bash
 echo "gh $*" >>"$STUB_LOG"
 case "$*" in
-  *"release view"*) [ -n "${STUB_NO_RELEASE:-}" ] && exit 1 || exit 0 ;;
+  *"release view"*) [ -n "${STUB_NO_RELEASE:-}" ] && exit 1; printf '%s\n' ${STUB_EXISTING:-} ;;
   *"release upload"*) ;;
 esac
 EOF
@@ -53,7 +53,7 @@ run() { # tag [VAR=value...]
   log="$work/log.$RANDOM"
   : >"$log"
   rm -rf "$work/out"
-  out="$(env -i PATH="$stubs:/usr/bin:/bin" STUB_LOG="$log" ATTACH_ROOT="$fake" ATTACH_OUT="$work/out" "$@" bash "$script" "$tag" "$work/bundle" 2>"$work/err")"
+  out="$(env -i PATH="$stubs:/usr/bin:/bin" STUB_LOG="$log" ATTACH_ROOT="$fake" ATTACH_OUT="$work/out" ATTACH_COMMIT=abc1234 "$@" bash "$script" "$tag" "$work/bundle" 2>"$work/err")"
   code=$?
   err="$(cat "$work/err")"
 }
@@ -69,6 +69,12 @@ done
 assert_match "the sha256 file names the versioned file" "^[0-9a-f]{64}  PaliCanon-0.1.0-x86_64.deb$" "$(cat "$work/out/PaliCanon-0.1.0-x86_64.deb.sha256")"
 assert_eq "the stable copy is the same file" "$(cat "$work/out/PaliCanon-0.1.0-x86_64.deb")" "$(cat "$work/out/PaliCanon-x86_64.deb")"
 assert_eq "no Windows file on Linux" "0" "$(ls "$work/out" | grep -c setup || true)"
+info="$(cat "$work/out"/BUILD-INFO-*.txt 2>/dev/null)"
+assert_match "the build info names the tag" "^tag app-v0.1.0$" "$info"
+assert_match "the build info names the commit" "^commit abc1234$" "$info"
+last_bundle="$(grep -n 'release upload' "$log" | grep -v sha256 | tail -1 | cut -d: -f1)"
+first_sha="$(grep -n 'release upload.*sha256' "$log" | head -1 | cut -d: -f1)"
+if [ -n "$first_sha" ] && [ "$first_sha" -gt "$last_bundle" ]; then pass "the .sha256 files go up last"; else flunk "the .sha256 files go up last ($first_sha after $last_bundle)"; fi
 
 echo "== Windows: setup.exe"
 bundles nsis
@@ -77,6 +83,17 @@ assert_eq "exit 0 ($err)" "0" "$code"
 for f in PaliCanon-0.1.0-x86_64-setup.exe PaliCanon-x86_64-setup.exe PaliCanon-0.1.0-x86_64-setup.exe.sha256; do
   if [ -f "$work/out/$f" ]; then pass "$f made"; else flunk "$f made"; fi
 done
+
+echo "== a versioned asset already published"
+bundles deb
+run app-v0.1.0 STUB_EXISTING="PaliCanon-0.1.0-x86_64.deb PaliCanon-x86_64.deb"
+assert_eq "a published versioned asset: exit 1" "1" "$code"
+assert_match "it names ATTACH_FORCE" "ATTACH_FORCE=1" "$err"
+assert_eq "nothing uploaded" "0" "$(grep -c 'release upload' "$log" || true)"
+run app-v0.1.0 STUB_EXISTING="PaliCanon-0.1.0-x86_64.deb" ATTACH_FORCE=1
+assert_eq "forced: exit 0 ($err)" "0" "$code"
+run app-v0.1.0 STUB_EXISTING="PaliCanon-x86_64.deb"
+assert_eq "only the stable name exists: replaced freely, exit 0 ($err)" "0" "$code"
 
 echo "== refusals"
 bundles deb
