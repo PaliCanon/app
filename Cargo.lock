@@ -3810,7 +3810,6 @@ dependencies = [
  "palicanon_app_identity",
  "reqwest",
  "rusqlite",
- "rustix",
  "rustls",
  "security-framework 3.7.0",
  "serde",
