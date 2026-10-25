@@ -1,6 +1,6 @@
 # 011 The release script refused a good signature (SIGPIPE under pipefail)
 
-status: building · rank: 2 · level: simple · type: fix · request: the first real run of scripts/release.sh (007), 2026-10-25 · after: [007]
+status: merged · rank: 2 · level: simple · type: fix · request: the first real run of scripts/release.sh (007), 2026-10-25 · after: [007]
 worktree: /Users/lsh/projects/palicanon/wt/app-011/app (branch `fix/app-release-pipefail`)
 
 ## Summary
@@ -12,5 +12,7 @@ The first real `scripts/release.sh build` signed the sidecar and the app correct
 | Step | Result | Output |
 | --- | --- | --- |
 | Build | ✓ | `has` helper, six pipelines rewritten; the codesign stub's long tail; the guard against `| grep -q`; suite 120 checks with stubs, 117 with the real disk tools; the old script fails it (build exit 1 "no timestamp") |
+| Merge | ✓ | e434139 on main (squash); the release build re-run on main |
 
 ## Retro
+One line: a stub that prints one line cannot show a pipe that breaks on a long output; the stubs of a tool now print as much as the tool.
