@@ -1,6 +1,6 @@
 # 012 The release script asked gh for a field it does not have
 
-status: building · rank: 2 · level: simple · type: fix · request: the first real run of scripts/release.sh (007), 2026-10-25 · after: [011]
+status: merged · rank: 2 · level: simple · type: fix · request: the first real run of scripts/release.sh (007), 2026-10-25 · after: [011]
 worktree: /Users/lsh/projects/palicanon/wt/app-012/app (branch `fix/app-release-latest`)
 
 ## Summary
@@ -12,5 +12,7 @@ The first full run built, signed, notarized and stapled the app and the DMG, pas
 | Step | Result | Output |
 | --- | --- | --- |
 | Build | ✓ | `latest_tag` over the API; `release_json` asks for isDraft and assets only; the gh stub rejects isLatest and answers the API's latest; suite 120 with stubs, 117 with the real disk tools; the old script fails it |
+| Merge | ✓ | 05f5d6e on main (squash); the draft of the first run is kept: same commit range for the app, only the script changed |
 
 ## Retro
+One line: a stub must refuse what the real tool refuses; 011 and 012 were both stubs kinder than the tool.
