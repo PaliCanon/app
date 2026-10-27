@@ -1,9 +1,12 @@
 //! `xtask yuga`: the local search's files, fetched, checked against pinned
 //! SHA-256 digests, and staged for the bundle (never committed):
 //!
-//! - the `yuga-sidecar` binary (anatta-rs/yuga-releases, a public release,
-//!   the Yuga Binary License) as `bin/yuga-sidecar-<target triple>`, the
-//!   name Tauri's `externalBin` looks for, and its licence beside it;
+//! - the `yuga-sidecar` binary of the build machine's platform
+//!   (anatta-rs/yuga-releases, a public release, the Yuga Binary License) as
+//!   `bin/yuga-sidecar-<target triple>[.exe]`, the name Tauri's `externalBin`
+//!   looks for, and its licence beside it; a platform with no released
+//!   sidecar (Intel macOS: ONNX Runtime ships no prebuilt binary for it) is
+//!   refused;
 //! - the English store (`gs://palicanon-app-assets`, private: `gsutil` with
 //!   the builder's credentials), unpacked into `store/`;
 //! - the `BAAI/bge-m3-int8` query model (`Xenova/bge-m3` at a pinned
@@ -18,9 +21,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use sha2::{Digest, Sha256};
-
-/// The target the bundle is built for (macOS on Apple silicon first).
-pub const TRIPLE: &str = "aarch64-apple-darwin";
 
 /// Where a pinned file comes from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,15 +42,56 @@ pub struct Pinned {
     pub sha256: &'static str,
 }
 
-/// yuga-sidecar 0.5.2: words at once, the model in the background; its
-/// answers add a `complete` field.
-pub const SIDECAR: Pinned = Pinned {
-    file: "yuga-sidecar-0.5.2-aarch64-apple-darwin.tar.gz",
-    source: Source::Https(
-        "https://github.com/anatta-rs/yuga-releases/releases/download/yuga-sidecar-v0.5.2/yuga-sidecar-0.5.2-aarch64-apple-darwin.tar.gz",
-    ),
-    sha256: "a0878f002970f55dd7065c0e70ef519f53989559bddc6965dcba696a42c62963",
-};
+/// A platform the bundle is built for: its Rust target triple, its
+/// executable suffix and its released sidecar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Target {
+    /// `std::env::consts::OS` of the build machine.
+    pub os: &'static str,
+    /// `std::env::consts::ARCH` of the build machine.
+    pub arch: &'static str,
+    /// The Rust target triple Tauri names the sidecar with.
+    pub triple: &'static str,
+    /// `.exe` on Windows, empty elsewhere.
+    pub exe: &'static str,
+    /// The released archive of yuga-sidecar for this triple.
+    pub sidecar: Pinned,
+}
+
+/// yuga-sidecar 0.5.2 (words at once, the model in the background; answers
+/// with a `complete` field), one archive per platform, all built from yuga
+/// commit 0a4d0e8.
+pub const TARGETS: [Target; 1] = [Target {
+    os: "macos",
+    arch: "aarch64",
+    triple: "aarch64-apple-darwin",
+    exe: "",
+    sidecar: Pinned {
+        file: "yuga-sidecar-0.5.2-aarch64-apple-darwin.tar.gz",
+        source: Source::Https(
+            "https://github.com/anatta-rs/yuga-releases/releases/download/yuga-sidecar-v0.5.2/yuga-sidecar-0.5.2-aarch64-apple-darwin.tar.gz",
+        ),
+        sha256: "a0878f002970f55dd7065c0e70ef519f53989559bddc6965dcba696a42c62963",
+    },
+}];
+
+/// The target of a build machine, by its `os` and `arch`.
+pub fn target_of(os: &str, arch: &str) -> Option<&'static Target> {
+    TARGETS.iter().find(|t| t.os == os && t.arch == arch)
+}
+
+/// The target of this build machine (the bundle is built natively).
+///
+/// # Errors
+/// No sidecar is released for this platform.
+pub fn current_target() -> Result<&'static Target, YugaError> {
+    let (os, arch) = (std::env::consts::OS, std::env::consts::ARCH);
+    target_of(os, arch).ok_or_else(|| {
+        YugaError::Failed(format!(
+            "no yuga-sidecar is released for {os} on {arch}: the bundle cannot be built here"
+        ))
+    })
+}
 
 /// The English store built with `BAAI/bge-m3` (2026-10-02, b).
 pub const STORE: Pinned = Pinned {
@@ -95,9 +136,10 @@ pub const MODEL: [(&str, &str, &str); 5] = [
 /// The binary's name inside the release archive.
 pub const BINARY: &str = "yuga-sidecar";
 
-/// The name Tauri's `externalBin` looks for: `<name>-<target triple>`.
-pub fn external_bin_name() -> String {
-    format!("{BINARY}-{TRIPLE}")
+/// The name Tauri's `externalBin` looks for: `<name>-<target triple>`, with
+/// `.exe` on Windows.
+pub fn external_bin_name(target: &Target) -> String {
+    format!("{BINARY}-{}{}", target.triple, target.exe)
 }
 
 /// The Hugging Face address of a model file at the pinned revision.
@@ -300,13 +342,13 @@ pub fn model_files() -> Vec<(&'static str, String, &'static str)> {
 pub fn stage(
     out: &Path,
     cache: Option<&Path>,
-    sidecar: Pinned,
+    target: &Target,
     store: Pinned,
     model: &[(&str, Source<'_>, &str)],
     fetch: &dyn Fetch,
 ) -> Result<Staged, YugaError> {
     let cached = |name: &str| cache.map(|c| c.join(name));
-    let binary = stage_sidecar(out, sidecar, cached(sidecar.file).as_deref(), fetch)?;
+    let binary = stage_sidecar(out, target, cached(target.sidecar.file).as_deref(), fetch)?;
     let store_dir = stage_store(out, store, cached(store.file).as_deref(), fetch)?;
     // The model: each file checked in place.
     let model_dir = out.join("model");
@@ -330,19 +372,20 @@ pub fn stage(
 /// name in `bin/`, its licence in `licence/`.
 fn stage_sidecar(
     out: &Path,
-    sidecar: Pinned,
+    target: &Target,
     cached: Option<&Path>,
     fetch: &dyn Fetch,
 ) -> Result<PathBuf, YugaError> {
     let failed = |e: std::io::Error| YugaError::Failed(e.to_string());
+    let sidecar = target.sidecar;
     let archive = out.join("downloads").join(sidecar.file);
     obtain(&sidecar.source, sidecar.sha256, &archive, cached, fetch)?;
     let unpacked = out.join("unpacked-sidecar");
     unpack(&archive, &unpacked)?;
     let top = top_dir(&unpacked)?;
-    let binary = out.join("bin").join(external_bin_name());
+    let binary = out.join("bin").join(external_bin_name(target));
     std::fs::create_dir_all(out.join("bin")).map_err(failed)?;
-    std::fs::copy(top.join(BINARY), &binary).map_err(failed)?;
+    std::fs::copy(top.join(format!("{BINARY}{}", target.exe)), &binary).map_err(failed)?;
     std::fs::create_dir_all(out.join("licence")).map_err(failed)?;
     if top.join("LICENSE.md").is_file() {
         std::fs::copy(
@@ -480,9 +523,47 @@ mod tests {
             .collect()
     }
 
+    fn mac(sidecar: Pinned) -> Target {
+        Target {
+            sidecar,
+            ..TARGETS[0]
+        }
+    }
+
+    fn windows(sidecar: Pinned) -> Target {
+        Target {
+            os: "windows",
+            arch: "x86_64",
+            triple: "x86_64-pc-windows-msvc",
+            exe: ".exe",
+            sidecar,
+        }
+    }
+
     #[test]
     fn the_external_bin_is_named_with_the_target_triple() {
-        assert_eq!(external_bin_name(), "yuga-sidecar-aarch64-apple-darwin");
+        let mac = target_of("macos", "aarch64").unwrap();
+        assert_eq!(external_bin_name(mac), "yuga-sidecar-aarch64-apple-darwin");
+        assert_eq!(
+            external_bin_name(&windows(mac.sidecar)),
+            "yuga-sidecar-x86_64-pc-windows-msvc.exe"
+        );
+    }
+
+    /// Intel macOS has no sidecar (no prebuilt ONNX Runtime): refused, not
+    /// built with the Apple silicon one.
+    #[test]
+    fn a_platform_with_no_released_sidecar_is_refused() {
+        assert_eq!(target_of("macos", "x86_64"), None);
+        assert_eq!(target_of("freebsd", "x86_64"), None);
+        for t in TARGETS {
+            assert!(t.sidecar.file.contains(t.triple), "{}", t.triple);
+            assert_eq!(t.exe, if t.os == "windows" { ".exe" } else { "" });
+            assert!(
+                matches!(t.sidecar.source, Source::Https(u) if u.ends_with(t.sidecar.file) && u.contains("/yuga-sidecar-v0.5.2/"))
+            );
+            assert_eq!(t.sidecar.sha256.len(), 64);
+        }
     }
 
     /// The pins are the brief's and yuga's: the release and its digest, the
@@ -491,11 +572,8 @@ mod tests {
     #[test]
     fn the_pins_are_the_released_files() {
         assert_eq!(
-            SIDECAR.sha256,
+            target_of("macos", "aarch64").unwrap().sidecar.sha256,
             "a0878f002970f55dd7065c0e70ef519f53989559bddc6965dcba696a42c62963"
-        );
-        assert!(
-            matches!(SIDECAR.source, Source::Https(u) if u.ends_with(SIDECAR.file) && u.contains("/yuga-sidecar-v0.5.2/"))
         );
         assert!(matches!(STORE.source, Source::Gs(u) if u.ends_with(STORE.file)));
         let names: Vec<&str> = MODEL.iter().map(|(n, _, _)| *n).collect();
@@ -529,7 +607,7 @@ mod tests {
     fn everything_is_staged_checked_and_the_binary_named_for_tauri() {
         let (root, fetch, sidecar, store, model) = remote("stage");
         let out = root.join("out");
-        let staged = stage(&out, None, sidecar, store, &sources(&model), &fetch).unwrap();
+        let staged = stage(&out, None, &mac(sidecar), store, &sources(&model), &fetch).unwrap();
         assert_eq!(
             staged.binary,
             out.join("bin/yuga-sidecar-aarch64-apple-darwin")
@@ -544,7 +622,7 @@ mod tests {
         );
         assert_eq!(fetch.asked.borrow().len(), 4);
         // A second run keeps what is there with its digest: nothing fetched.
-        stage(&out, None, sidecar, store, &sources(&model), &fetch).unwrap();
+        stage(&out, None, &mac(sidecar), store, &sources(&model), &fetch).unwrap();
         assert_eq!(fetch.asked.borrow().len(), 4);
     }
 
@@ -562,7 +640,7 @@ mod tests {
         stage(
             &root.join("out"),
             Some(&cache),
-            sidecar,
+            &mac(sidecar),
             store,
             &sources(&model),
             &fetch,
@@ -581,7 +659,7 @@ mod tests {
         let (root, fetch, mut sidecar, store, model) = remote("digest");
         sidecar.sha256 = "0000000000000000000000000000000000000000000000000000000000000000";
         let out = root.join("out");
-        let err = stage(&out, None, sidecar, store, &sources(&model), &fetch).unwrap_err();
+        let err = stage(&out, None, &mac(sidecar), store, &sources(&model), &fetch).unwrap_err();
         assert!(matches!(err, YugaError::Digest { .. }), "{err}");
         assert!(!out.join("downloads/sidecar.tar.gz").exists());
         assert!(!out.join("bin").exists());
@@ -594,7 +672,7 @@ mod tests {
         let err = stage(
             &root.join("out"),
             None,
-            sidecar,
+            &mac(sidecar),
             store,
             &sources(&model),
             &fetch,

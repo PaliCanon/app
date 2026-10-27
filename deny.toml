@@ -2,7 +2,7 @@
 # build of the front. A later target (Windows, Linux, iOS, Android) is added
 # here when its build joins CI, with the advisories it brings.
 [graph]
-targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "wasm32-unknown-unknown"]
+targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
 [advisories]
 version = 2
@@ -17,6 +17,11 @@ ignore = [
     { id = "RUSTSEC-2025-0081", reason = "unic-char-property is unmaintained; reached only through tauri-utils's urlpattern — drop when tauri moves off it (ignored 2026-10-16)" },
     { id = "RUSTSEC-2025-0098", reason = "unic-ucd-version is unmaintained; reached only through tauri-utils's urlpattern — drop when tauri moves off it (ignored 2026-10-16)" },
     { id = "RUSTSEC-2025-0100", reason = "unic-ucd-ident is unmaintained; reached only through tauri-utils's urlpattern — drop when tauri moves off it (ignored 2026-10-16)" },
+    # Linux only (task 013): Tauri's GTK stack and its D-Bus plugins.
+    { id = "RUSTSEC-2024-0370", reason = "proc-macro-error is unmaintained; reached only through glib-macros in Tauri's GTK 0.18 stack on Linux, at build time — drop when tauri moves to GTK 4 bindings (ignored 2026-10-25)" },
+    { id = "RUSTSEC-2026-0370", reason = "zvariant is no longer a standalone crate; reached only through zbus (tauri-plugin-opener, tauri-plugin-single-instance, the Secret Service) on Linux — drop when zbus moves (ignored 2026-10-25)" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names is no longer a standalone crate; reached only through zbus on Linux, as above (ignored 2026-10-25)" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive is no longer a standalone crate; reached only through zbus on Linux, as above (ignored 2026-10-25)" },
 ]
 
 [licenses]

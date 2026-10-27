@@ -73,7 +73,7 @@ pub fn run(
             let staged = yuga::stage(
                 &out,
                 cache.as_deref(),
-                yuga::SIDECAR,
+                yuga::current_target()?,
                 yuga::STORE,
                 &model,
                 &yuga::Tools,

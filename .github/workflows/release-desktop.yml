@@ -1,0 +1,110 @@
+# The Windows and Linux bundles of a release (task 013), attached to the
+# GitHub Release the macOS script made (scripts/release.sh, on the author's
+# Mac: signing and notarization need its Keychain). Run by hand once that
+# release exists: `gh workflow run release-desktop.yml -f tag=app-v<version>`.
+#
+# The build inputs the bucket holds (the store, the dictionary, the forms,
+# the passages) come from the pre-release `build-inputs-<date>` of this
+# repository: they are already public inside every bundle, and the CI then
+# needs no cloud credential. xtask checks each file against its pinned
+# SHA-256 (XTASK_YUGA_CACHE), so a changed input fails the build.
+#
+# Windows is unsigned (SmartScreen warns at the first launch); Linux needs
+# no signature. Each asset is uploaded twice: versioned, and under a stable
+# name that `releases/latest/download/<name>` serves.
+name: release (Windows, Linux)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release to attach the bundles to (app-v<version>)
+        required: true
+      inputs:
+        description: The pre-release holding the build inputs (build-inputs-<date>), named on every run
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  TAILWIND_VERSION: v4.2.1
+
+jobs:
+  bundle:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x86_64 (deb, AppImage)
+            os: ubuntu-22.04
+            bundles: deb,appimage
+            tailwind: tailwindcss-linux-x64
+          - name: Windows x86_64 (setup.exe)
+            os: windows-latest
+            bundles: nsis
+            tailwind: tailwindcss-windows-x64.exe
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/private-deps
+      - name: Linux libraries (WebKitGTK, D-Bus for the Secret Service)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev libdbus-1-dev patchelf pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk,tauri-cli
+      - name: Tailwind CLI
+        shell: bash
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/${{ matrix.tailwind }}" "https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/${{ matrix.tailwind }}"
+          chmod +x "$RUNNER_TEMP/${{ matrix.tailwind }}"
+          echo "TAILWIND=$RUNNER_TEMP/${{ matrix.tailwind }}" >> "$GITHUB_ENV"
+      - name: Build inputs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/inputs"
+          gh release download "${{ inputs.inputs }}" --repo "${{ github.repository }}" --dir "$RUNNER_TEMP/inputs"
+          echo "XTASK_YUGA_CACHE=$RUNNER_TEMP/inputs" >> "$GITHUB_ENV"
+      - name: Bundle
+        shell: bash
+        working-directory: crates/desktop
+        env:
+          # The Desktop OAuth client's secret (Google: not confidential for an
+          # installed app; PKCE protects the code), compiled in by build.rs.
+          PALICANON_GOOGLE_DESKTOP_SECRET: ${{ secrets.PALICANON_GOOGLE_DESKTOP_SECRET }}
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          [ -n "$PALICANON_GOOGLE_DESKTOP_SECRET" ] || { echo "the secret PALICANON_GOOGLE_DESKTOP_SECRET is missing: the app would ship with no sync" >&2; exit 1; }
+          cargo tauri build --bundles ${{ matrix.bundles }} --config tauri.bundle.conf.json
+      - name: The sidecar runs from the bundle
+        shell: bash
+        # It refuses a missing store with a message: it starts, its ONNX
+        # Runtime (linked statically by ort) included. On Linux, ldd shows no
+        # library left unresolved.
+        run: |
+          bin="$(ls target/yuga/bin/yuga-sidecar-* | head -1)"
+          if [ "$RUNNER_OS" = Linux ]; then
+            libs="$(ldd "$bin")"
+            echo "$libs"
+            if grep -q "not found" <<<"$libs"; then echo "a library of the sidecar is unresolved" >&2; exit 1; fi
+          fi
+          set +e
+          out="$("$bin" --store does-not-exist --model does-not-exist 2>&1 </dev/null)"
+          code=$?
+          echo "exit $code: $out"
+          [ "$code" -ne 0 ] && [ -n "$out" ]
+      - name: Name, hash and attach
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/attach-bundles.sh "${{ inputs.tag }}" target/release/bundle

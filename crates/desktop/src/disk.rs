@@ -66,21 +66,31 @@ impl Disk for RealDisk {
         std::fs::rename(from, to)
     }
 
+    #[cfg(not(windows))]
     fn sync_dir(&self, dir: &Path) -> io::Result<()> {
         File::open(dir)?.sync_all()
     }
 
+    /// Windows opens no directory as a file; NTFS journals the rename itself
+    /// (task 013).
+    #[cfg(windows)]
+    fn sync_dir(&self, dir: &Path) -> io::Result<()> {
+        std::fs::metadata(dir).map(|_| ())
+    }
+
+    /// The standard library's file lock: `flock` on Unix, `LockFileEx` on
+    /// Windows; both belong to the open file (task 013: rustix's `flock`
+    /// was Unix only).
     fn try_lock(&self, path: &Path) -> io::Result<Option<File>> {
-        use rustix::fs::{FlockOperation, flock};
         let file = std::fs::OpenOptions::new()
             .create(true)
             .truncate(false)
             .write(true)
             .open(path)?;
-        match flock(&file, FlockOperation::NonBlockingLockExclusive) {
+        match file.try_lock() {
             Ok(()) => Ok(Some(file)),
-            Err(rustix::io::Errno::WOULDBLOCK) => Ok(None),
-            Err(error) => Err(error.into()),
+            Err(std::fs::TryLockError::WouldBlock) => Ok(None),
+            Err(std::fs::TryLockError::Error(error)) => Err(error),
         }
     }
 }
@@ -114,8 +124,8 @@ mod tests {
         assert!(RealDisk.read(&dir).is_err());
     }
 
-    /// `flock` locks belong to the open file: a second open of the same
-    /// file, in this process too, cannot take it while the first holds it.
+    /// The lock belongs to the open file: a second open of the same file, in
+    /// this process too, cannot take it while the first holds it.
     #[test]
     fn the_lock_is_exclusive_until_its_file_is_closed() {
         let dir = temp("lock");
