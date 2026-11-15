@@ -20,7 +20,7 @@ learn_core.workspace = true
 log = "0.4"
 palicanon-app-bridge = { path = "../bridge" }
 palicanon_app_identity = { path = "../identity" }
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2", features = [] }
