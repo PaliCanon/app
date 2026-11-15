@@ -13,10 +13,11 @@ use crate::pins::Pins;
 /// without it did not read ui-lib's `src`.
 pub const UI_LIB_MARKER: &str = ".min-h-screen";
 
-/// A class only the map crate's sources use (the translators' table collapses its
-/// borders; neither ui-lib nor the front uses it): a CSS without it did not
-/// read the map's `src`.
-pub const MAP_MARKER: Option<&str> = Some(".border-collapse");
+/// A class only the map crate's sources use (the engine canvas in the map's
+/// `src/map/engine_view.rs` is `touch-none`, so the browser leaves its touch
+/// gestures to the map; no other pinned source uses it): a CSS without it did
+/// not read the map's `src`. Plain characters only: Tailwind escapes the rest.
+pub const MAP_MARKER: Option<&str> = Some(".touch-none");
 
 /// Why the CSS could not be built.
 #[derive(Debug, PartialEq, Eq)]
@@ -337,6 +338,72 @@ mod tests {
             markers_with(&pins, Some(".map-only")),
             [UI_LIB_MARKER, ".map-only"]
         );
+    }
+
+    /// Every whole token of every `.rs` file under `dir` (recursive). A token
+    /// is a run of characters other than whitespace, quotes, backticks and
+    /// `< > = { } ( ) , ;`, so `class="a md:b"` gives `a` and `md:b`, and
+    /// `md:b` is not `b` (Tailwind writes `.md\:b`, not `.b`). Prose and
+    /// comments are tokenised too: a class named in a comment counts as used.
+    fn rs_tokens(dir: &Path) -> std::collections::BTreeSet<String> {
+        let mut tokens = std::collections::BTreeSet::new();
+        let mut dirs = vec![dir.to_path_buf()];
+        while let Some(dir) = dirs.pop() {
+            for entry in
+                std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
+            {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    dirs.push(path);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    let text = std::fs::read_to_string(&path).unwrap();
+                    tokens.extend(
+                        text.split(|c: char| c.is_whitespace() || "\"'`<>={}(),;".contains(c))
+                            .filter(|t| !t.is_empty())
+                            .map(str::to_string),
+                    );
+                }
+            }
+        }
+        tokens
+    }
+
+    /// `marker` (a `.class`) is a whole token under the pinned map crate's
+    /// `src` and under no other pinned source's `src`: the CSS holding it then
+    /// proves that the map's sources were read. The sources are the real pins'
+    /// (`pins::of_workspace` on this workspace).
+    fn assert_map_only_uses(marker: &str) {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let pins = crate::pins::of_workspace(&root).unwrap_or_else(|e| panic!("{e}"));
+        let class = marker.strip_prefix('.').expect("a marker starts with `.`");
+        assert!(
+            class.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'),
+            "{marker}: Tailwind would escape it in the CSS"
+        );
+        let map = pins.map.expect("the pins have a map crate").join("src");
+        assert!(
+            rs_tokens(&map).contains(class),
+            "no source of {} uses `{class}`",
+            map.display()
+        );
+        let others = [&pins.ui_lib, &pins.front]
+            .into_iter()
+            .chain([&pins.learn, &pins.search].into_iter().flatten());
+        for other in others {
+            assert!(
+                !rs_tokens(&other.join("src")).contains(class),
+                "{} also uses `{class}`",
+                other.join("src").display()
+            );
+        }
+    }
+
+    /// The map's marker is a class the pinned map sources use as a whole
+    /// token and no other pinned source does (see [`rs_tokens`]): a bump of
+    /// the map's pin that drops the class fails here, not at the build.
+    #[test]
+    fn the_map_marker_is_a_class_only_the_pinned_map_sources_use() {
+        assert_map_only_uses(MAP_MARKER.expect("the map has a marker"));
     }
 
     /// A fake `$HOME` holding the CLI where cargo-leptos puts it.
