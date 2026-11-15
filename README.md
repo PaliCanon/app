@@ -132,11 +132,10 @@ RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps
 cargo +1.91 check --locked                      # MSRV
 cargo deny check advisories bans sources licenses
 (cd crates/front && trunk build --release --cargo-profile wasm-release)
-cargo llvm-cov --locked --lcov --output-path lcov.info   # then Codecov
+cargo llvm-cov --locked
 ```
 
-Coverage uploads to Codecov with the `CODECOV_TOKEN` secret. Jobs that fetch
-ui-lib use the `private-deps` action (the GitHub App `palicanon-ci`).
+Jobs that fetch ui-lib use the `private-deps` action (the GitHub App `palicanon-ci`).
 
 ## Licence
 
